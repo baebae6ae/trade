@@ -296,10 +296,20 @@ def api_full_reset():
 
 @app.route("/api/positions")
 def api_positions():
-    """모든 활성 포지션 목록 반환"""
+    """모든 활성 포지션 목록 반환 (P&L 실시간 재계산)"""
+    last_close = engine.bars[-1].close if engine.bars else 0
     positions = []
     for symbol, state in engine.states.items():
         if state.active:
+            # P&L 실시간 재계산
+            if last_close > 0:
+                if state.direction == "long":
+                    state.unrealized_pnl = (last_close - state.avg_entry) * state.total_qty
+                else:
+                    state.unrealized_pnl = (state.avg_entry - last_close) * state.total_qty
+                if state.avg_entry > 0 and state.total_qty > 0:
+                    state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
+
             positions.append({
                 "symbol": symbol,
                 "direction": state.direction,
@@ -308,6 +318,16 @@ def api_positions():
                 "unrealized_pnl": round(state.unrealized_pnl, 2),
                 "unrealized_pnl_pct": round(state.unrealized_pnl_pct, 2),
                 "bars_in_trade": state.bars_in_trade,
+                "initial_stop": round(state.initial_stop, 6),
+                "active_stop": round(state.active_stop, 6),
+                "trailing_stop": round(state.trailing_stop, 6),
+                "breakeven_stop": round(state.breakeven_stop, 6),
+                "r_multiple": round(state.r_multiple, 4),
+                "pyramid_count": state.pyramid_count,
+                "avg_down_count": state.avg_down_count,
+                "current_risk": round(state.current_risk, 2),
+                "fills": state.fills,
+                "events": state.events[-20:],
             })
     return jsonify({"positions": positions, "count": len(positions)})
 
@@ -396,10 +416,25 @@ def api_ticker_set():
     if not bars:
         return jsonify({"error": f"{symbol} 데이터를 가져올 수 없습니다"}), 400
 
-    # 기존 데이터 초기화 후 새 데이터 로드
-    engine.full_reset()
+    # 기존 포트폴리오 포지션 보존! (봉/ATR만 초기화)
+    saved_states = dict(engine.states)  # 포지션 백업
+    saved_history = list(engine.trade_history)  # 거래 내역 백업
+
+    engine.bars.clear()
+    engine.atr_values.clear()
+    engine.current_atr = 0.0
+    engine.bar_index = 0
+    engine.entry_pending = False
+    engine.manual_touch_occurred = False
+
     for bar in bars:
-        engine.process_bar(bar)
+        engine.bars.append(bar)
+        engine.bar_index = len(engine.bars) - 1
+        engine._update_atr()
+
+    # 포지션 & 거래내역 복원
+    engine.states = saved_states
+    engine.trade_history = saved_history
 
     # 설정 업데이트
     engine.config["ticker_symbol"] = symbol
@@ -430,37 +465,29 @@ def api_ticker_refresh():
     if not symbol:
         return jsonify({"error": "설정된 종목이 없습니다"}), 400
 
-    # 현재 거래 상태 백업
-    had_active_trade = engine.state.active
-    trade_backup = None
-    if had_active_trade:
-        trade_backup = engine.state.to_dict()
-        history_backup = list(engine.trade_history)
+    # 포트폴리오 상태 전체 백업
+    saved_states = dict(engine.states)
+    saved_history = list(engine.trade_history)
 
     # 새 데이터 가져오기
     bars = fetcher.fetch_bars(symbol, interval=interval, count=count)
     if not bars:
         return jsonify({"error": "데이터 갱신 실패"}), 400
 
-    # 엔진 리셋 후 새 데이터 로드
+    # 봉/ATR만 리셋
     engine.bars.clear()
     engine.atr_values.clear()
     engine.current_atr = 0.0
     engine.bar_index = 0
 
-    # 거래 상태가 있었다면 보존
-    if had_active_trade and trade_backup:
-        engine.trade_history = history_backup
-
     for bar in bars:
-        # 활성 거래가 있으면 process_bar로 관리 계속
         engine.bars.append(bar)
         engine.bar_index = len(engine.bars) - 1
         engine._update_atr()
 
-    # 거래 상태 복원 (활성 거래의 stop 등은 유지)
-    if had_active_trade and trade_backup:
-        engine.state.from_dict_restore(trade_backup)
+    # 포트폴리오 상태 복원
+    engine.states = saved_states
+    engine.trade_history = saved_history
 
     _save()
     return jsonify({
@@ -468,7 +495,7 @@ def api_ticker_refresh():
         "bars_loaded": len(bars),
         "atr": round(engine.current_atr, 6),
         "last_price": bars[-1].close if bars else 0,
-        "trade_preserved": had_active_trade,
+        "trade_preserved": len([s for s in engine.states.values() if s.active]) > 0,
     })
 
 

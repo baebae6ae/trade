@@ -104,7 +104,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">포지션 방향</label>
-                            <select class="form-select form-select-sm" id="cfg_position_direction">
+                            <select class="form-select form-select-sm" id="cfg_adv_position_direction">
                                 <option value="long">롱 (Long)</option>
                                 <option value="short">숏 (Short)</option>
                             </select>
@@ -171,11 +171,11 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">총 자본금</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_total_capital" min="0">
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_adv_total_capital" min="0">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">거래당 리스크 (%)</label>
-                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_risk_per_trade_pct" min="0" max="100">
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adv_risk_per_trade_pct" min="0" max="100">
                             <div class="form-text">자본의 몇 %까지 손실 허용</div>
                         </div>
                         <div class="col-md-6">
@@ -738,6 +738,16 @@ async function loadSettings() {
                 el.value = cfg[field] !== undefined ? cfg[field] : '';
             }
         });
+        // 고급 모드 중복 ID 필드들도 동기화
+        const advMap = {
+            'cfg_adv_position_direction': cfg.position_direction || 'long',
+            'cfg_adv_total_capital': cfg.total_capital || 10000000,
+            'cfg_adv_risk_per_trade_pct': cfg.risk_per_trade_pct || 1.0,
+        };
+        for (const [id, val] of Object.entries(advMap)) {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        }
     } catch (err) {
         showToast('오류', '설정 불러오기 실패', 'danger');
     }
@@ -764,7 +774,12 @@ async function saveSettings() {
     } else {
         // 고급 모드: 모든 필드
         CFG_FIELDS.forEach(field => {
-            const el = document.getElementById(`cfg_${field}`);
+            // 고급 모드에서 중복 ID 필드는 _adv_ 버전에서 읽기
+            let elId = `cfg_${field}`;
+            if (['position_direction', 'total_capital', 'risk_per_trade_pct'].includes(field)) {
+                elId = `cfg_adv_${field}`;
+            }
+            const el = document.getElementById(elId);
             if (!el) return;
             if (CHECKBOX_FIELDS.includes(field)) {
                 data[field] = el.checked;

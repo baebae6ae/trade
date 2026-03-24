@@ -1374,6 +1374,18 @@ class TradeEngine:
                         f"{dir_str} 수동진입: {qty}주 @ {price:.2f} | "
                         f"날짜: {bar.timestamp} | 초기손절: {s.initial_stop:.2f} | ATR: {entry_atr:.4f}")
 
+        # 진입 즉시 P&L 계산 (최신 봉 종가 기준)
+        if self.bars:
+            last_close = self.bars[-1].close
+            if s.direction == "long":
+                s.unrealized_pnl = (last_close - s.avg_entry) * s.total_qty
+            else:
+                s.unrealized_pnl = (s.avg_entry - last_close) * s.total_qty
+            if s.avg_entry > 0 and s.total_qty > 0:
+                s.unrealized_pnl_pct = s.unrealized_pnl / (s.avg_entry * s.total_qty) * 100
+            if s.initial_risk_total != 0:
+                s.r_multiple = s.unrealized_pnl / abs(s.initial_risk_total)
+
         return {"success": True, "state": s.to_dict()}
 
     def manual_add(self, price: float, qty: float, add_type: str = "pyramid", symbol: str = "") -> dict:
@@ -1387,11 +1399,22 @@ class TradeEngine:
         if handling == "block":
             return {"error": f"{add_type} 추가진입이 차단되어 있습니다"}
 
-        allowed, reason = self._check_scale_in_gates(add_type, price, qty, s)
+        allowed, reason = self._check_scale_in_gates(add_type, price, qty)
         if not allowed:
             return {"error": reason}
 
-        self._execute_scale_in(price, qty, add_type, "수동", s)
+        self._execute_scale_in(price, qty, add_type, "수동")
+
+        # 추가진입 후 P&L 재계산
+        if self.bars:
+            last_close = self.bars[-1].close
+            if s.direction == "long":
+                s.unrealized_pnl = (last_close - s.avg_entry) * s.total_qty
+            else:
+                s.unrealized_pnl = (s.avg_entry - last_close) * s.total_qty
+            if s.avg_entry > 0 and s.total_qty > 0:
+                s.unrealized_pnl_pct = s.unrealized_pnl / (s.avg_entry * s.total_qty) * 100
+
         return {"success": True, "state": s.to_dict()}
 
     def manual_close(self, price: float = 0, symbol: str = "") -> dict:
@@ -1429,6 +1452,19 @@ class TradeEngine:
     # ── 상태 조회 ─────────────────────────────────────────
 
     def get_status(self) -> dict:
+        # 최신 봉 가격으로 모든 포지션 P&L 재계산
+        last_close = self.bars[-1].close if self.bars else 0
+        for symbol, state in self.states.items():
+            if state.active and last_close > 0:
+                if state.direction == "long":
+                    state.unrealized_pnl = (last_close - state.avg_entry) * state.total_qty
+                else:
+                    state.unrealized_pnl = (state.avg_entry - last_close) * state.total_qty
+                if state.avg_entry > 0 and state.total_qty > 0:
+                    state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
+                if state.initial_risk_total != 0:
+                    state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
+
         # 현재 활성 포지션들을 모두 반환
         trades = {}
         for symbol, state in self.states.items():
@@ -1560,8 +1596,8 @@ def validate_config(config: dict) -> List[str]:
         warnings.append("Trailing ATR 배수가 0 이하입니다.")
     if config.get("atr_length", 0) < 1:
         warnings.append("ATR 기간이 1 미만입니다.")
-    if config.get("manual_entry_price", 0) <= 0 and config.get("entry_source") == "manual":
-        warnings.append("수동 진입가가 설정되지 않았습니다.")
+    # manual_entry_price 경고는 UI에서 직접 가격을 입력하므로 제거
+    # (거래 관리 탭에서 직접 가격을 입력하는 방식과 충돌)
     return warnings
 
 

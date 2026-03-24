@@ -183,22 +183,25 @@
             <!-- 거래 상태 패널 -->
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-speedometer2 me-2"></i>거래 현황판</span>
+                    <span><i class="bi bi-speedometer2 me-2"></i>내 포트폴리오</span>
                     <span class="badge" id="tradeStatusBadge">대기</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="trade-status-panel" id="tradeStatusPanel">
                         <table class="table table-sm table-dark mb-0">
                             <tbody id="statusTableBody">
-                                <tr><td class="text-muted" colspan="2">포지션이 없습니다</td></tr>
+                                <tr><td class="text-muted" colspan="6">포지션이 없습니다</td></tr>
                             </tbody>
                         </table>
                     </div>
+                    <!-- 선택된 포지션 상세 정보 -->
+                    <div id="positionDetail" class="p-3 bg-dark border-top" style="display:none;">
+                        <div id="positionDetailContent"></div>
+                    </div>
                     <div class="p-3 bg-dark border-top small text-muted">
                         <i class="bi bi-lightbulb me-1"></i>
-                        <strong>설명:</strong> 
-                        위 표의 각 항목에 마우스를 올리면 설명이 나옵니다. 
-                        특히 "활성 손절가"는 지금 가격이 여기까지 떨어지면 자동으로 팝니다.
+                        <strong>사용법:</strong> 
+                        종목을 클릭하면 상세 정보와 매매 가이드가 표시됩니다.
                     </div>
                 </div>
             </div>
@@ -404,28 +407,48 @@ function updateTradePanel(data) {
         .then(r => r.json())
         .then(posData => {
             const positions = posData.positions || [];
+            window._allPositions = positions;  // 상세보기용 저장
             
             if (positions.length === 0) {
                 badge.textContent = '대기 중';
                 badge.className = 'badge bg-secondary';
-                tbody.innerHTML = '<tr><td class="text-muted" colspan="5"><i class="bi bi-clock me-1"></i>포지션이 없습니다. 위의 "내 포지션 입력"에서 시작하세요!</td></tr>';
+                tbody.innerHTML = '<tr><td class="text-muted" colspan="6"><i class="bi bi-clock me-1"></i>포지션이 없습니다. 위의 "내 포지션 입력"에서 시작하세요!</td></tr>';
+                document.getElementById('positionDetail').style.display = 'none';
             } else {
-                badge.textContent = `📊 거래중 ${positions.length}개`;
+                // 전체 포트폴리오 요약
+                const totalPnl = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+                const pnlColor = totalPnl >= 0 ? 'text-success' : 'text-danger';
+                badge.innerHTML = `📊 ${positions.length}개 | 총 손익: <span class="${pnlColor}">${formatCurrency(totalPnl)}</span>`;
                 badge.className = 'badge bg-info';
                 
                 // 포지션 목록 테이블
-                tbody.innerHTML = '<tr class="table-header"><th>종목</th><th>방향</th><th>수량</th><th>진입가</th><th>손익</th></tr>' +
-                    positions.map(pos => {
-                        const dir = pos.direction === 'long' ? '📈 상승' : '📉 하락';
-                        const pnl_color = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
-                        return `<tr class="cursor-pointer" onclick="selectPosition('${pos.symbol}')">
-                            <td class="fw-bold">${pos.symbol}</td>
-                            <td>${dir}</td>
-                            <td>${pos.qty.toLocaleString()}</td>
-                            <td>${pos.entry_price.toFixed(2)}</td>
-                            <td class="${pnl_color} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td>
-                        </tr>`;
-                    }).join('');
+                let tableHtml = `<tr class="table-secondary">
+                    <th>종목</th><th>방향</th><th>수량</th><th>평균단가</th><th>손익</th><th>손절가</th>
+                </tr>`;
+                positions.forEach(pos => {
+                    const dir = pos.direction === 'long' ? '📈' : '📉';
+                    const pnl_color = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
+                    tableHtml += `<tr class="cursor-pointer position-row" onclick="selectPosition('${pos.symbol}')" style="cursor:pointer;" title="클릭하면 상세 정보를 봅니다">
+                        <td class="fw-bold">${pos.symbol}</td>
+                        <td>${dir}</td>
+                        <td>${pos.qty.toLocaleString()}</td>
+                        <td>${pos.entry_price.toLocaleString()}</td>
+                        <td class="${pnl_color} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td>
+                        <td class="text-danger">${pos.active_stop.toLocaleString()}</td>
+                    </tr>`;
+                });
+                // 전체 합계 행
+                tableHtml += `<tr class="table-dark border-top">
+                    <td colspan="4" class="fw-bold text-end">전체 합계</td>
+                    <td class="${pnlColor} fw-bold">${formatCurrency(totalPnl)}</td>
+                    <td></td>
+                </tr>`;
+                tbody.innerHTML = tableHtml;
+                
+                // 자동으로 첫번째 포지션 상세 보기 (이미 없으면)
+                if (!document.getElementById('positionDetail').style.display || document.getElementById('positionDetail').style.display === 'none') {
+                    selectPosition(positions[0].symbol);
+                }
             }
             
             // 이벤트 로그 (현재 심볼의 이벤트)
@@ -442,7 +465,7 @@ function updateTradePanel(data) {
                             else if (e.type === 'breakeven') icon = '🛡️ 보호';
                             else if (e.type === 'trailing_stop') icon = '📉 추적';
                             else if (e.type === 'exit') icon = '🔒 청산';
-                            else if (e.type === 'add') icon = '➕ 추가';
+                            else if (e.type === 'scale_in') icon = '➕ 추가';
                             
                             return `<div class="event-item event-${e.type} small border-bottom py-2">
                                 <strong>${icon}</strong>
@@ -450,6 +473,9 @@ function updateTradePanel(data) {
                                 <span class="text-muted float-end">#${e.bar}</span>
                             </div>`;
                         }).join('');
+                    } else {
+                        document.getElementById('eventLogCount').textContent = '0';
+                        document.getElementById('eventLog').innerHTML = '<div class="text-center text-muted py-4 small"><i class="bi bi-inbox me-1"></i>거래 기록이 없습니다</div>';
                     }
                 });
         });
@@ -460,8 +486,6 @@ function updateTradePanel(data) {
 
     // 네비 업데이트
     const navEl = document.getElementById('navStatus');
-    document.getElementById('chartBarCount').textContent = `${data.bar_count}봉`;
-    document.getElementById('chartAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
     
     fetch('/api/positions')
         .then(r => r.json())
@@ -477,11 +501,119 @@ function updateTradePanel(data) {
     document.getElementById('navAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
 }
 
-// 포지션 선택 함수 (클릭 시)
+// 포지션 선택 → 상세 정보 + 매매 가이드 표시
 function selectPosition(symbol) {
     document.getElementById('entrySymbol').value = symbol;
-    // 선택된 포지션 상세 보기 가능 (필요하면 모달 추가)
-    showToast('선택', `${symbol} 포지션을 선택했습니다`, 'info');
+    
+    const positions = window._allPositions || [];
+    const pos = positions.find(p => p.symbol === symbol);
+    if (!pos) return;
+    
+    const detailDiv = document.getElementById('positionDetail');
+    const contentDiv = document.getElementById('positionDetailContent');
+    detailDiv.style.display = 'block';
+    
+    const dir = pos.direction === 'long' ? '📈 상승 예상 (롱)' : '📉 하락 예상 (숏)';
+    const pnlColor = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
+    
+    // 매매 가이드 생성
+    let guide = '';
+    const stopDist = Math.abs(pos.entry_price - pos.active_stop);
+    const stopPct = pos.entry_price > 0 ? (stopDist / pos.entry_price * 100).toFixed(2) : 0;
+    
+    if (pos.unrealized_pnl_pct > 0) {
+        // 수익 중
+        if (pos.trailing_stop > 0) {
+            guide = `<div class="alert alert-success py-2 mb-0">
+                <strong>✅ 수익 중 — 추적 손절 활성</strong><br>
+                <small>추적 손절가(${pos.trailing_stop.toLocaleString()}) 이하로 떨어지면 자동 청산됩니다. 수익을 지키면서 더 오를 수 있도록 지켜보세요.</small>
+            </div>`;
+        } else if (pos.breakeven_stop > 0) {
+            guide = `<div class="alert alert-info py-2 mb-0">
+                <strong>🛡️ 본전 보호 중</strong><br>
+                <small>본전가(${pos.breakeven_stop.toLocaleString()}) 아래로 안 내려가도록 걸려 있습니다. 손실 없이 지켜보세요.</small>
+            </div>`;
+        } else {
+            guide = `<div class="alert alert-warning py-2 mb-0">
+                <strong>📊 수익 중 — 손절 아직 진입가 위로 안 올라옴</strong><br>
+                <small>현재 손절가(${pos.active_stop.toLocaleString()})는 진입가 아래입니다. 더 올라가면 자동으로 보호 수준이 올라갑니다.</small>
+            </div>`;
+        }
+    } else {
+        // 손실 중
+        guide = `<div class="alert alert-danger py-2 mb-0">
+            <strong>⚠️ 손실 중 (${pos.unrealized_pnl_pct.toFixed(2)}%)</strong><br>
+            <small>현재 손절가: ${pos.active_stop.toLocaleString()} (진입가 대비 ${stopPct}% 거리). 이 가격에 도달하면 손절하세요. 물타기는 신중하게!</small>
+        </div>`;
+    }
+    
+    // 거래 이력 (fills)
+    let fillsHtml = '';
+    if (pos.fills && pos.fills.length > 0) {
+        fillsHtml = `<div class="mt-2">
+            <strong class="small">📋 거래 이력:</strong>
+            <div class="small mt-1">` + pos.fills.map(f => {
+                const typeStr = f.type === 'entry' ? '🔓 진입' : f.type === 'pyramid' ? '📈 피라미딩' : '📉 물타기';
+                return `<div class="text-muted">${typeStr}: ${f.qty}주 @ ${f.price.toLocaleString()} → 평균 ${f.avg_after.toLocaleString()}</div>`;
+            }).join('') + `</div></div>`;
+    }
+    
+    contentDiv.innerHTML = `
+        <div class="mb-2">
+            <strong class="fs-6">${symbol}</strong> <span class="badge ${pos.direction === 'long' ? 'bg-success' : 'bg-danger'}">${dir}</span>
+        </div>
+        <table class="table table-sm table-dark mb-2">
+            <tr><td width="40%">평균 단가</td><td class="fw-bold">${pos.entry_price.toLocaleString()}</td></tr>
+            <tr><td>보유 수량</td><td>${pos.qty.toLocaleString()}</td></tr>
+            <tr><td>미실현 손익</td><td class="${pnlColor} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td></tr>
+            <tr><td>R 배수</td><td>${pos.r_multiple.toFixed(2)}배</td></tr>
+            <tr><td>보유 기간</td><td>${pos.bars_in_trade}봉</td></tr>
+            <tr class="table-danger"><td colspan="2"><strong>손절 정보</strong></td></tr>
+            <tr><td>초기 손절가</td><td class="text-danger">${pos.initial_stop.toLocaleString()}</td></tr>
+            <tr><td>활성 손절가</td><td class="fw-bold text-danger">${pos.active_stop.toLocaleString()}</td></tr>
+            <tr><td>추적 손절</td><td class="text-warning">${pos.trailing_stop > 0 ? pos.trailing_stop.toLocaleString() : '아직'}</td></tr>
+            <tr><td>본전 보호</td><td class="text-info">${pos.breakeven_stop > 0 ? pos.breakeven_stop.toLocaleString() : '아직'}</td></tr>
+            <tr class="table-info"><td colspan="2"><strong>추가 진입</strong></td></tr>
+            <tr><td>피라미딩</td><td>${pos.pyramid_count}회</td></tr>
+            <tr><td>물타기</td><td>${pos.avg_down_count}회</td></tr>
+            <tr><td>현재 리스크</td><td>${formatCurrency(pos.current_risk)}</td></tr>
+        </table>
+        ${guide}
+        ${fillsHtml}
+        <div class="mt-2 d-flex gap-2">
+            <button class="btn btn-outline-danger btn-sm flex-fill" onclick="closePosition('${symbol}')">
+                <i class="bi bi-x-circle me-1"></i>${symbol} 청산
+            </button>
+            <button class="btn btn-outline-warning btn-sm flex-fill" onclick="resetPosition('${symbol}')">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>${symbol} 리셋
+            </button>
+        </div>
+    `;
+}
+
+// 특정 포지션 청산
+async function closePosition(symbol) {
+    const price = parseFloat(document.getElementById('closePrice').value) || 0;
+    if (!confirm(symbol + ' 포지션을 청산하시겠습니까?')) return;
+    const res = await fetchJson('/api/close', { symbol, price });
+    if (res.error) {
+        showToast('오류', res.error, 'danger');
+    } else {
+        const s = res.summary;
+        showToast('청산 완료',
+            `${symbol} 손익: ${formatCurrency(s.pnl)} (${s.pnl_pct.toFixed(2)}%)`,
+            s.pnl >= 0 ? 'success' : 'danger');
+        loadTradeStatus();
+    }
+}
+
+// 특정 포지션 리셋
+async function resetPosition(symbol) {
+    if (!confirm(symbol + ' 포지션을 리셋하시겠습니까?')) return;
+    await fetchJson('/api/reset', { symbol });
+    showToast('리셋', symbol + ' 포지션이 리셋되었습니다', 'info');
+    document.getElementById('positionDetail').style.display = 'none';
+    loadTradeStatus();
 }
 
 let lastChartJson = '';
