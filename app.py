@@ -6,6 +6,7 @@ import os
 import json
 import csv
 import io
+import subprocess
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from engine import TradeEngine, Bar, DEFAULT_CONFIG, validate_config, MarketDataFetcher, INTERVAL_PERIODS, INTERVAL_LABELS
 
@@ -27,7 +28,36 @@ if os.path.exists(STATE_FILE):
 
 
 def _save():
+    """반전 데이터 저장 + GitHub 자동 백업"""
     engine.save_state(STATE_FILE)
+    
+    # GitHub 자동 백업 (Railway 배포 후 포지션 손실 방지)
+    try:
+        # git add data/state.json
+        subprocess.run(
+            ["git", "add", "data/state.json"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True,
+            timeout=5
+        )
+        # git commit
+        result = subprocess.run(
+            ["git", "commit", "-m", "auto: backup positions from Railway"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True,
+            timeout=5
+        )
+        # git push (변경사항이 있을 때만)
+        if result.returncode == 0 or b"nothing to commit" not in result.stdout + result.stderr:
+            subprocess.run(
+                ["git", "push"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                capture_output=True,
+                timeout=10
+            )
+    except Exception as e:
+        # 백업 실패해도 로컬 파일은 저장됨 (무시)
+        pass
 
 
 # ─── 페이지 라우트 ──────────────────────────────────────────
@@ -436,6 +466,9 @@ def api_ticker_set():
     # 포지션 & 거래내역 복원
     engine.states = saved_states
     engine.trade_history = saved_history
+    
+    # 현재 선택 종목으로 업데이트 (다중 종목 UI 동기화)
+    engine.current_symbol = symbol
 
     # 설정 업데이트
     engine.config["ticker_symbol"] = symbol

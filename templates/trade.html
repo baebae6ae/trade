@@ -326,6 +326,7 @@ async function selectTicker(symbol, name) {
         }
 
         currentSymbol = symbol;
+        lastChartJson = '';  // 차트 캐시 초기화 (새 종목 차트 강제 로드)
 
         // UI 업데이트
         document.getElementById('tickerBar').style.display = 'flex';
@@ -337,7 +338,7 @@ async function selectTicker(symbol, name) {
             `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${res.name} | ${res.bars_loaded}봉 로드 | ATR: ${res.atr?.toFixed(2)}</span>`;
 
         showToast('종목 로드', `${symbol} ${res.bars_loaded}봉 로드 완료`, 'success');
-        loadTradeStatus();
+        loadTradeStatus();  // 이 함수 안에서 포지션 정보 + 차트 로드
     } catch (err) {
         showToast('오류', '데이터 로드 실패', 'danger');
         document.getElementById('tickerInfo').textContent = '로드 실패';

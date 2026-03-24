@@ -1465,18 +1465,30 @@ class TradeEngine:
     # ── 상태 조회 ─────────────────────────────────────────
 
     def get_status(self) -> dict:
-        # 최신 봉 가격으로 모든 포지션 P&L 재계산
-        last_close = self.bars[-1].close if self.bars else 0
+        # 각 포지션마다 실제 현재 가격으로 P&L 계산 (다중 종목 지원)
         for symbol, state in self.states.items():
-            if state.active and last_close > 0:
-                if state.direction == "long":
-                    state.unrealized_pnl = (last_close - state.avg_entry) * state.total_qty
+            if state.active:
+                # 현재 로드된 종목이면 bars의 마지막 가격 사용, 아니면 실시간 조회
+                if symbol == self.current_symbol:
+                    current_price = self.bars[-1].close if self.bars else 0
                 else:
-                    state.unrealized_pnl = (state.avg_entry - last_close) * state.total_qty
-                if state.avg_entry > 0 and state.total_qty > 0:
-                    state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
-                if state.initial_risk_total != 0:
-                    state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
+                    # 다른 종목의 현재 가격 실시간 조회
+                    try:
+                        price_data = MarketDataFetcher.get_latest_price(symbol)
+                        current_price = price_data.get("price", 0)
+                    except:
+                        current_price = 0
+                
+                if current_price > 0:
+                    if state.direction == "long":
+                        state.unrealized_pnl = (current_price - state.avg_entry) * state.total_qty
+                    else:
+                        state.unrealized_pnl = (state.avg_entry - current_price) * state.total_qty
+                    
+                    if state.avg_entry > 0 and state.total_qty > 0:
+                        state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
+                    if state.initial_risk_total != 0:
+                        state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
 
         # 현재 활성 포지션들을 모두 반환
         trades = {}
@@ -1503,19 +1515,23 @@ class TradeEngine:
 
     def get_chart_data(self) -> dict:
         bars_data = [b.to_dict() for b in self.bars[-500:]]
+        # 현재 선택된 종목의 상태 가져오기 (다중 종목 지원)
+        current_state = self.state
+        
         # stop_history/fills 내 float 안전 처리
         safe_stops = []
-        for s in self.state.stop_history[-500:]:
+        for s in current_state.stop_history[-500:]:
             safe_stops.append({k: _safe_float(v) if isinstance(v, float) else v for k, v in s.items()})
         safe_fills = []
-        for f in self.state.fills:
+        for f in current_state.fills:
             safe_fills.append({k: _safe_float(v) if isinstance(v, float) else v for k, v in f.items()})
         return {
             "bars": bars_data,
             "stop_history": safe_stops,
             "fills": safe_fills,
-            "entry_price": _safe_float(self.state.avg_entry) if self.state.active else 0,
-            "active": self.state.active,
+            "entry_price": _safe_float(current_state.avg_entry) if current_state.active else 0,
+            "active": current_state.active,
+            "symbol": self.current_symbol,
         }
 
     def get_dashboard_stats(self) -> dict:
