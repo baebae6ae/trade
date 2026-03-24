@@ -64,7 +64,7 @@
         <!-- 왼쪽: 차트 -->
         <div class="col-lg-8">
             <!-- 현재 종목 정보 -->
-            <div class="d-flex justify-content-between align-items-center mb-2" id="tickerBar" style="display:none!important;">
+            <div class="d-flex justify-content-between align-items-center mb-2" id="tickerBar" style="display:none;">
                 <div>
                     <span class="fw-bold fs-5" id="tickerSymbolDisplay">--</span>
                     <span class="text-muted ms-2" id="tickerNameDisplay"></span>
@@ -94,18 +94,24 @@
                 <div class="card-body">
                     <div id="entrySection">
                         <div class="row g-2 mb-2">
-                            <div class="col-4">
+                            <div class="col-6">
+                                <label class="form-label small">진입 날짜</label>
+                                <input type="date" class="form-control form-control-sm" id="entryDate">
+                            </div>
+                            <div class="col-6">
                                 <label class="form-label small">방향</label>
                                 <select class="form-select form-select-sm" id="entryDirection">
                                     <option value="long">롱 (매수)</option>
                                     <option value="short">숏 (매도)</option>
                                 </select>
                             </div>
-                            <div class="col-4">
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
                                 <label class="form-label small">진입가</label>
                                 <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="현재가">
                             </div>
-                            <div class="col-4">
+                            <div class="col-6">
                                 <label class="form-label small">수량 (0=자동)</label>
                                 <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0">
                             </div>
@@ -428,11 +434,15 @@ let lastChartJson = '';
 
 function updatePriceChart(data) {
     fetch('/api/chart').then(r => r.json()).then(chart => {
-        const newJson = JSON.stringify({bc: chart.bars?.length, active: chart.active, sh: chart.stop_history?.length});
-        if (newJson !== lastChartJson) {
+        const newJson = JSON.stringify({bc: chart.bars?.length, active: chart.active, sh: chart.stop_history?.length, ep: chart.entry_price});
+        if (newJson !== lastChartJson || !lastChartJson) {
             drawPriceChart(chart);
             lastChartJson = newJson;
         }
+    }).catch(err => {
+        console.error('Chart load error:', err);
+        // 에러 시에도 재시도를 위해 lastChartJson 리셋
+        lastChartJson = '';
     });
 }
 
@@ -595,6 +605,7 @@ async function manualEntry() {
     const price = parseFloat(document.getElementById('entryPrice').value);
     const qty = parseFloat(document.getElementById('entryQty').value) || 0;
     const direction = document.getElementById('entryDirection').value;
+    const entryDate = document.getElementById('entryDate').value;  // YYYY-MM-DD or ''
 
     if (!price || price <= 0) {
         showToast('오류', '진입 가격을 입력하세요', 'warning');
@@ -604,7 +615,7 @@ async function manualEntry() {
     // 방향 설정 반영
     await fetchJson('/api/config', { position_direction: direction, entry_source: 'manual' });
 
-    const res = await fetchJson('/api/entry', { price, qty });
+    const res = await fetchJson('/api/entry', { price, qty, entry_date: entryDate || '' });
     if (res.error) {
         showToast('오류', res.error, 'danger');
     } else {

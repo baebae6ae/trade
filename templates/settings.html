@@ -5,12 +5,17 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0"><i class="bi bi-gear me-2"></i>설정</h4>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-info active" id="btnBeginner" onclick="setMode('beginner')">
+                    <i class="bi bi-emoji-smile me-1"></i>간편 모드
+                </button>
+                <button class="btn btn-outline-secondary" id="btnAdvanced" onclick="setMode('advanced')">
+                    <i class="bi bi-sliders me-1"></i>고급 모드
+                </button>
+            </div>
             <button class="btn btn-sm btn-primary" onclick="saveSettings()">
                 <i class="bi bi-check-lg me-1"></i>저장
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadSettings()">
-                <i class="bi bi-arrow-clockwise me-1"></i>불러오기
             </button>
             <button class="btn btn-sm btn-outline-danger" onclick="resetSettings()">
                 <i class="bi bi-arrow-counterclockwise me-1"></i>기본값 복원
@@ -21,6 +26,70 @@
     <!-- 경고 메시지 -->
     <div id="settingsWarnings" class="mb-3" style="display:none;"></div>
 
+    <!-- ═══ 간편 모드 (초보자) ═══ -->
+    <div id="beginnerPanel">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-emoji-smile me-2"></i>기본 설정
+                <span class="text-muted ms-2 small">이것만 설정하면 나머지는 자동으로 관리됩니다</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">총 투자금</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="cfg_total_capital" value="10000000" min="0" step="100000">
+                            <span class="input-group-text">원</span>
+                        </div>
+                        <div class="form-text">투자에 사용할 전체 금액</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">매매당 리스크</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="cfg_risk_per_trade_pct" value="1.0" min="0.1" max="10" step="0.1">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="form-text">한 번 거래에서 감수할 최대 손실 비율 (1~2% 권장)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">포지션 방향</label>
+                        <select class="form-select" id="cfg_position_direction">
+                            <option value="long">롱 (매수) - 오를 때 수익</option>
+                            <option value="short">숏 (매도) - 내릴 때 수익</option>
+                        </select>
+                        <div class="form-text">보통 '롱'을 사용합니다</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-dark border-info">
+            <div class="card-body">
+                <h6 class="text-info mb-3"><i class="bi bi-lightbulb me-2"></i>자동 관리되는 항목들</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled small mb-0">
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 수량 자동 계산 (리스크 기반)</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 초기 손절가 자동 설정 (ATR × 2.0)</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 추적 손절 자동 활성화</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 본전 보호 자동 적용</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled small mb-0">
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> ATR 14봉 자동 계산</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 적응형 관리 활성화</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 품질 게이트 활성화</li>
+                            <li class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> 추가진입은 수동 제어</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ 고급 모드 ═══ -->
+    <div id="advancedPanel" style="display:none;">
     <div class="accordion" id="settingsAccordion">
 
         <!-- 1. Entry -->
@@ -598,37 +667,40 @@
             </div>
         </div>
     </div>
+    </div><!-- /advancedPanel -->
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+let currentMode = 'beginner';
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('beginnerPanel').style.display = mode === 'beginner' ? 'block' : 'none';
+    document.getElementById('advancedPanel').style.display = mode === 'advanced' ? 'block' : 'none';
+    document.getElementById('btnBeginner').className = mode === 'beginner' ? 'btn btn-info active' : 'btn btn-outline-secondary';
+    document.getElementById('btnAdvanced').className = mode === 'advanced' ? 'btn btn-info active' : 'btn btn-outline-secondary';
+}
+
 const CFG_FIELDS = [
-    // Entry
     'position_direction', 'entry_source', 'trade_start_bar', 'manual_entry_price',
     'manual_activation', 'manual_uses_start_time',
-    // Sizing
     'sizing_mode', 'initial_qty', 'total_capital', 'risk_per_trade_pct',
     'qty_preset', 'custom_rounding', 'custom_qty_step', 'show_warnings',
-    // Scale-In
     'enable_manual_scale_ins', 'scale_in_stop_handling', 'pyramid_stop_handling',
     'avg_down_stop_handling', 'soft_rebase_weight', 'cap_to_risk_budget',
     'min_add_spacing_atr', 'max_pyramid_adds', 'max_avg_down_adds',
     'avg_down_allowed_until', 'manual_add_fill_mode',
-    // Conditional Pyramid
     'enable_conditional_pyramid', 'auto_add_trigger', 'auto_add_qty_mode',
     'auto_add_fixed_qty', 'auto_add_qty_pct', 'max_auto_adds',
     'auto_add_cooldown_bars', 'auto_add_base_mfe_atr', 'auto_add_step_mfe_atr',
-    // ATR
     'atr_length',
-    // Stop
     'initial_stop_atr_mult', 'trail_arm_trigger_atr', 'trail_arm_after_bars',
     'time_arm_min_progress_atr', 'trail_arm_on_new_extreme', 'trailing_atr_mult',
     'use_breakeven_ratchet', 'breakeven_trigger_atr', 'breakeven_offset_atr',
     'stop_hit_mode', 'update_on_bar_close', 'intrabar_conflict',
-    // Basis
     'trend_basis_reset', 'breakeven_basis', 'pyramid_favorable_basis',
-    // Adaptive
     'enable_adaptive_arm_be', 'enable_adaptive_trailing', 'use_hybrid_trailing_atr',
     'adaptive_lookback', 'atr_regime_lookback', 'early_mfe_mae_window',
     'use_trade_memory', 'adaptive_history_trades', 'adaptive_history_weight',
@@ -640,7 +712,6 @@ const CFG_FIELDS = [
     'adaptive_trailing_min_atr', 'adaptive_trailing_max_atr',
     'enable_quality_gate', 'quality_min_trend_mfe_atr',
     'quality_min_stop_improvement_atr', 'quality_min_efficiency', 'quality_min_headroom_pct',
-    // Display
     'label_language',
 ];
 
@@ -674,17 +745,36 @@ async function loadSettings() {
 
 async function saveSettings() {
     const data = {};
-    CFG_FIELDS.forEach(field => {
-        const el = document.getElementById(`cfg_${field}`);
-        if (!el) return;
-        if (CHECKBOX_FIELDS.includes(field)) {
-            data[field] = el.checked;
-        } else if (el.type === 'number') {
-            data[field] = el.value !== '' ? parseFloat(el.value) : 0;
-        } else {
-            data[field] = el.value;
-        }
-    });
+
+    if (currentMode === 'beginner') {
+        // 간편 모드: 3개 필드만 + 나머지 최적 기본값 자동 적용
+        data.total_capital = parseFloat(document.getElementById('cfg_total_capital').value) || 10000000;
+        data.risk_per_trade_pct = parseFloat(document.getElementById('cfg_risk_per_trade_pct').value) || 1.0;
+        data.position_direction = document.getElementById('cfg_position_direction').value;
+        // 자동 최적 설정
+        data.sizing_mode = 'risk_based';
+        data.entry_source = 'manual';
+        data.manual_activation = 'immediate';
+        data.enable_adaptive_arm_be = true;
+        data.enable_adaptive_trailing = true;
+        data.use_breakeven_ratchet = true;
+        data.enable_quality_gate = true;
+        data.use_trade_memory = true;
+        data.show_warnings = true;
+    } else {
+        // 고급 모드: 모든 필드
+        CFG_FIELDS.forEach(field => {
+            const el = document.getElementById(`cfg_${field}`);
+            if (!el) return;
+            if (CHECKBOX_FIELDS.includes(field)) {
+                data[field] = el.checked;
+            } else if (el.type === 'number') {
+                data[field] = el.value !== '' ? parseFloat(el.value) : 0;
+            } else {
+                data[field] = el.value;
+            }
+        });
+    }
 
     const res = await fetchJson('/api/config', data);
     if (res.error) {

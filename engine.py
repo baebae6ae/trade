@@ -13,6 +13,14 @@ from copy import deepcopy
 import yfinance as yf
 import pandas as pd
 
+
+def _safe_float(v):
+    """NaN/Inf를 0으로 변환 (JSON 직렬화 안전)"""
+    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+        return 0
+    return v
+
+
 # ─── 기본 설정 ─────────────────────────────────────────────
 
 DEFAULT_CONFIG = {
@@ -170,11 +178,11 @@ class Bar:
     def to_dict(self):
         return {
             "timestamp": self.timestamp,
-            "open": self.open,
-            "high": self.high,
-            "low": self.low,
-            "close": self.close,
-            "volume": self.volume,
+            "open": _safe_float(self.open),
+            "high": _safe_float(self.high),
+            "low": _safe_float(self.low),
+            "close": _safe_float(self.close),
+            "volume": _safe_float(self.volume),
         }
 
     @staticmethod
@@ -267,48 +275,49 @@ class TradeState:
         self.stop_history = []
 
     def to_dict(self):
+        _s = lambda v, n=6: _safe_float(round(v, n))
         return {
             "active": self.active,
             "direction": self.direction,
-            "entry_price": round(self.entry_price, 6),
+            "entry_price": _s(self.entry_price),
             "entry_time": self.entry_time,
             "entry_bar_idx": self.entry_bar_idx,
-            "avg_entry": round(self.avg_entry, 6),
-            "total_qty": round(self.total_qty, 6),
-            "initial_qty": round(self.initial_qty, 6),
-            "initial_stop": round(self.initial_stop, 6),
-            "trailing_stop": round(self.trailing_stop, 6),
-            "active_stop": round(self.active_stop, 6),
-            "breakeven_stop": round(self.breakeven_stop, 6),
+            "avg_entry": _s(self.avg_entry),
+            "total_qty": _s(self.total_qty),
+            "initial_qty": _s(self.initial_qty),
+            "initial_stop": _s(self.initial_stop),
+            "trailing_stop": _s(self.trailing_stop),
+            "active_stop": _s(self.active_stop),
+            "breakeven_stop": _s(self.breakeven_stop),
             "trail_armed": self.trail_armed,
             "trail_arm_reason": self.trail_arm_reason,
             "breakeven_active": self.breakeven_active,
-            "highest": round(self.highest, 6),
-            "lowest": round(self.lowest, 6),
-            "mfe": round(self.mfe, 4),
-            "mae": round(self.mae, 4),
+            "highest": _s(self.highest),
+            "lowest": _s(self.lowest),
+            "mfe": _s(self.mfe, 4),
+            "mae": _s(self.mae, 4),
             "bars_in_trade": self.bars_in_trade,
             "pyramid_count": self.pyramid_count,
             "avg_down_count": self.avg_down_count,
             "auto_add_count": self.auto_add_count,
-            "initial_risk_per_unit": round(self.initial_risk_per_unit, 6),
-            "initial_risk_total": round(self.initial_risk_total, 2),
-            "current_risk": round(self.current_risk, 2),
-            "max_risk": round(self.max_risk, 2),
-            "risk_budget": round(self.risk_budget, 2),
-            "entry_atr": round(self.entry_atr, 6),
-            "risk_basis": round(self.risk_basis, 6),
-            "trend_basis": round(self.trend_basis, 6),
-            "pyramid_basis": round(self.pyramid_basis, 6),
-            "adaptive_arm_mult": round(self.adaptive_arm_mult, 4),
-            "adaptive_be_mult": round(self.adaptive_be_mult, 4),
-            "adaptive_trail_mult": round(self.adaptive_trail_mult, 4),
-            "noise_score": round(self.noise_score, 4),
-            "trend_efficiency": round(self.trend_efficiency, 4),
-            "atr_regime": round(self.atr_regime, 4),
-            "unrealized_pnl": round(self.unrealized_pnl, 2),
-            "unrealized_pnl_pct": round(self.unrealized_pnl_pct, 4),
-            "r_multiple": round(self.r_multiple, 4),
+            "initial_risk_per_unit": _s(self.initial_risk_per_unit),
+            "initial_risk_total": _s(self.initial_risk_total, 2),
+            "current_risk": _s(self.current_risk, 2),
+            "max_risk": _s(self.max_risk, 2),
+            "risk_budget": _s(self.risk_budget, 2),
+            "entry_atr": _s(self.entry_atr),
+            "risk_basis": _s(self.risk_basis),
+            "trend_basis": _s(self.trend_basis),
+            "pyramid_basis": _s(self.pyramid_basis),
+            "adaptive_arm_mult": _s(self.adaptive_arm_mult, 4),
+            "adaptive_be_mult": _s(self.adaptive_be_mult, 4),
+            "adaptive_trail_mult": _s(self.adaptive_trail_mult, 4),
+            "noise_score": _s(self.noise_score, 4),
+            "trend_efficiency": _s(self.trend_efficiency, 4),
+            "atr_regime": _s(self.atr_regime, 4),
+            "unrealized_pnl": _s(self.unrealized_pnl, 2),
+            "unrealized_pnl_pct": _s(self.unrealized_pnl_pct, 4),
+            "r_multiple": _s(self.r_multiple, 4),
             "events": self.events[-100:],
             "fills": self.fills,
             "stop_history": self.stop_history[-500:],
@@ -1246,23 +1255,42 @@ class TradeEngine:
 
     # ── 직접 진입 (UI에서 호출) ───────────────────────────
 
-    def manual_entry(self, price: float, qty: float = 0):
-        """UI에서 직접 진입 실행"""
+    def manual_entry(self, price: float, qty: float = 0, entry_date: str = ""):
+        """UI에서 직접 진입 실행. entry_date가 주어지면 해당 날짜 봉을 기준으로 진입."""
         if self.state.active:
             return {"error": "이미 활성 거래가 있습니다"}
         if not self.bars:
             return {"error": "가격 데이터가 없습니다"}
 
         cfg = self.config
+
+        # 진입 날짜에 해당하는 봉 찾기
         bar = self.bars[-1]
+        bar_idx = self.bar_index
+        entry_atr = self.current_atr
+
+        if entry_date:
+            found = False
+            for i, b in enumerate(self.bars):
+                # timestamp 형식: "YYYY-MM-DD HH:MM" 또는 "YYYY-MM-DD"
+                if b.timestamp.startswith(entry_date):
+                    bar = b
+                    bar_idx = i
+                    # 해당 봉 시점의 ATR 사용 (가능하면)
+                    if i < len(self.atr_values) and self.atr_values[i] > 0:
+                        entry_atr = self.atr_values[i]
+                    found = True
+                    break
+            if not found:
+                return {"error": f"'{entry_date}' 날짜의 봉 데이터를 찾을 수 없습니다"}
 
         s = self.state
         s.active = True
         s.direction = cfg["position_direction"]
         s.entry_price = price
         s.entry_time = bar.timestamp
-        s.entry_bar_idx = self.bar_index
-        s.entry_atr = self.current_atr
+        s.entry_bar_idx = bar_idx
+        s.entry_atr = entry_atr
 
         if qty <= 0:
             qty = self._calc_position_size(price)
@@ -1274,7 +1302,7 @@ class TradeEngine:
         s.trend_basis = price
         s.pyramid_basis = price
 
-        s.initial_stop = self._calc_initial_stop(price, self.current_atr)
+        s.initial_stop = self._calc_initial_stop(price, entry_atr)
         s.active_stop = s.initial_stop
 
         s.highest = max(bar.high, price)
@@ -1291,7 +1319,7 @@ class TradeEngine:
             s.risk_budget = s.initial_risk_total * 2
 
         s.fills.append({
-            "bar": self.bar_index,
+            "bar": bar_idx,
             "price": round(price, 6),
             "qty": round(qty, 6),
             "type": "entry",
@@ -1301,7 +1329,7 @@ class TradeEngine:
         })
 
         s.stop_history.append({
-            "bar": self.bar_index,
+            "bar": bar_idx,
             "initial": round(s.initial_stop, 6),
             "trailing": 0,
             "breakeven": 0,
@@ -1311,7 +1339,7 @@ class TradeEngine:
         dir_str = "롱" if s.direction == "long" else "숏"
         self._add_event("entry",
                         f"{dir_str} 수동진입: {qty}주 @ {price:.2f} | "
-                        f"초기손절: {s.initial_stop:.2f} | ATR: {self.current_atr:.4f}")
+                        f"날짜: {bar.timestamp} | 초기손절: {s.initial_stop:.2f} | ATR: {entry_atr:.4f}")
 
         return {"success": True, "state": s.to_dict()}
 
@@ -1362,7 +1390,7 @@ class TradeEngine:
     def get_status(self) -> dict:
         return {
             "trade": self.state.to_dict(),
-            "atr": round(self.current_atr, 6),
+            "atr": _safe_float(round(self.current_atr, 6)),
             "bar_count": len(self.bars),
             "bar_index": self.bar_index,
             "config": self.config,
@@ -1371,11 +1399,18 @@ class TradeEngine:
 
     def get_chart_data(self) -> dict:
         bars_data = [b.to_dict() for b in self.bars[-500:]]
+        # stop_history/fills 내 float 안전 처리
+        safe_stops = []
+        for s in self.state.stop_history[-500:]:
+            safe_stops.append({k: _safe_float(v) if isinstance(v, float) else v for k, v in s.items()})
+        safe_fills = []
+        for f in self.state.fills:
+            safe_fills.append({k: _safe_float(v) if isinstance(v, float) else v for k, v in f.items()})
         return {
             "bars": bars_data,
-            "stop_history": self.state.stop_history[-500:],
-            "fills": self.state.fills,
-            "entry_price": self.state.avg_entry if self.state.active else 0,
+            "stop_history": safe_stops,
+            "fills": safe_fills,
+            "entry_price": _safe_float(self.state.avg_entry) if self.state.active else 0,
             "active": self.state.active,
         }
 
@@ -1538,6 +1573,11 @@ class MarketDataFetcher:
             df = ticker.history(period=period, interval=interval)
 
             if df is None or df.empty:
+                return []
+
+            # NaN 제거 (yfinance가 간혹 NaN 반환)
+            df = df.dropna(subset=["Open", "High", "Low", "Close"])
+            if df.empty:
                 return []
 
             # 최근 count개만

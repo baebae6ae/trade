@@ -232,10 +232,11 @@ def api_manual_entry():
 
     price = float(data.get("price", 0))
     qty = float(data.get("qty", 0))
+    entry_date = data.get("entry_date", "")
     if price <= 0:
         return jsonify({"error": "가격을 입력하세요"}), 400
 
-    result = engine.manual_entry(price, qty)
+    result = engine.manual_entry(price, qty, entry_date=entry_date)
     _save()
     return jsonify(result)
 
