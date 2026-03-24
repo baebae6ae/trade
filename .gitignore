@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 민감한 정보 (선택사항)
+# .env  # 환경변수 파일은 무시 가능
+
+# 테스트 파일
+data/test_*.json
+
+# data 폴더는 추적 (포지션 데이터 보존)
+# 아래 주석 제거 시 data 폴더 전체 추적
+# !/data/
+!/data/state.json
+!/data/.gitkeep
