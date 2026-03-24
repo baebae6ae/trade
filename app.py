@@ -244,7 +244,7 @@ def api_manual_entry():
 
 @app.route("/api/add", methods=["POST"])
 def api_manual_add():
-    """수동 추가진입 (포트폴리오 지원)"""
+    """수동 추가진입 (포트폴리오 지원, 날짜 기능)"""
     data = request.get_json()
     if not data:
         return jsonify({"error": "데이터가 없습니다"}), 400
@@ -253,13 +253,14 @@ def api_manual_add():
     qty = float(data.get("qty", 0))
     add_type = data.get("type", "pyramid")
     symbol = data.get("symbol", "")  # 포트폴리오 심볼
+    entry_date = data.get("entry_date", "")  # 날짜 기능
 
     if price <= 0 or qty <= 0:
         return jsonify({"error": "가격과 수량을 입력하세요"}), 400
     if add_type not in ("pyramid", "avg_down"):
         return jsonify({"error": "유형은 pyramid 또는 avg_down"}), 400
 
-    result = engine.manual_add(price, qty, add_type, symbol=symbol)
+    result = engine.manual_add(price, qty, add_type, symbol=symbol, entry_date=entry_date)
     _save()
     return jsonify(result)
 

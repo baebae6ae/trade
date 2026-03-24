@@ -1388,8 +1388,8 @@ class TradeEngine:
 
         return {"success": True, "state": s.to_dict()}
 
-    def manual_add(self, price: float, qty: float, add_type: str = "pyramid", symbol: str = "") -> dict:
-        """UI에서 직접 추가진입"""
+    def manual_add(self, price: float, qty: float, add_type: str = "pyramid", symbol: str = "", entry_date: str = "") -> dict:
+        """UI에서 직접 추가진입 (날짜 기능 지원)"""
         s = self._get_or_create_state(symbol or self.current_symbol or "default")
         if not s.active:
             return {"error": "활성 거래가 없습니다"}
@@ -1402,6 +1402,19 @@ class TradeEngine:
         allowed, reason = self._check_scale_in_gates(add_type, price, qty)
         if not allowed:
             return {"error": reason}
+
+        # 날짜 기반 ATR 사용 (있으면)
+        entry_atr = self.current_atr
+        if entry_date:
+            found = False
+            for i, b in enumerate(self.bars):
+                if b.timestamp.startswith(entry_date):
+                    if i < len(self.atr_values) and self.atr_values[i] > 0:
+                        entry_atr = self.atr_values[i]
+                    found = True
+                    break
+            if not found:
+                return {"error": f"'{entry_date}' 날짜의 봉 데이터를 찾을 수 없습니다"}
 
         self._execute_scale_in(price, qty, add_type, "수동")
 

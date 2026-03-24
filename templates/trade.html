@@ -155,25 +155,39 @@
                 <div class="card-body">
                     <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>목표 가격에 추가로 더 샀을 때, 여기에 입력하세요</p>
                     <div class="row g-2 mb-2">
-                        <div class="col-4">
+                        <div class="col-6">
+                            <label class="form-label small">추가 날짜</label>
+                            <input type="date" class="form-control form-control-sm" id="addDate">
+                            <div class="form-text">선택사항 (특정 날짜 ATR 사용)</div>
+                        </div>
+                        <div class="col-3">
                             <label class="form-label small">가격</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice" placeholder="예: 48000">
+                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice" placeholder="ex: 48000" onchange="updateAddTypeExpl()">
                             <div class="form-text">샀던 가격</div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-3">
                             <label class="form-label small">수량</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addQty" placeholder="예: 100">
-                            <div class="form-text">몇 주를 샀나</div>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small">유형</label>
-                            <select class="form-select form-select-sm" id="addType">
-                                <option value="pyramid">추가 진입</option>
-                                <option value="avg_down">손절치고 다시</option>
-                            </select>
-                            <div class="form-text" title="추가진입: 같은 손절 / 손절치고 다시: 새로운 손절">어떤 건가요?</div>
+                            <input type="number" step="any" class="form-control form-control-sm" id="addQty" placeholder="ex: 100">
+                            <div class="form-text">몇 주</div>
                         </div>
                     </div>
+                    
+                    <!-- 유형 설명 추가 -->
+                    <div class="mb-3 p-2 bg-dark rounded border border-info small">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">추가진입 유형</label>
+                            <div class="form-text"><i class="bi bi-lightbulb me-1"></i>
+                                <strong>현재 평균:</strong> <span id="currentAvg">--</span>
+                                | <strong>추가 가격:</strong> <span id="comparePrice">--</span>
+                            </div>
+                        </div>
+                        <select class="form-select form-select-sm" id="addType" onchange="updateAddTypeExpl()">
+                            <option value="pyramid">📈 피라미딩 - 좋은 방향으로 추가 (평균가보다 높게/낮게)</option>
+                            <option value="avg_down">📉 물타기 - 나쁜 방향으로 추가 (손실감수)</option>
+                        </select>
+                        <div id="typeExpl" class="form-text mt-1"></div>
+                    </div>
+                    
                     <button class="btn btn-info btn-sm w-100" onclick="manualAdd()">
                         <i class="bi bi-plus me-1"></i>추가 진입 기록
                     </button>
@@ -509,6 +523,14 @@ function selectPosition(symbol) {
     const pos = positions.find(p => p.symbol === symbol);
     if (!pos) return;
     
+    // 현재 선택된 포지션을 전역변수에 저장 (추가진입 폼에서 참고)
+    window._currentPosition = pos;
+    
+    // 추가진입 폼에서 현재 평균가 표시
+    document.getElementById('currentAvg').textContent = pos.entry_price.toLocaleString();
+    document.getElementById('comparePrice').textContent = '--';
+    document.getElementById('addPrice').value = '';  // 입력 초기화
+    
     const detailDiv = document.getElementById('positionDetail');
     const contentDiv = document.getElementById('positionDetailContent');
     detailDiv.style.display = 'block';
@@ -833,6 +855,7 @@ async function manualClose() {
 
 async function manualAdd() {
     const symbol = document.getElementById('entrySymbol').value.trim() || currentSymbol;  // 포트폴리오: 심볼 지정
+    const addDate = document.getElementById('addDate').value;  // 날짜 추가
     const price = parseFloat(document.getElementById('addPrice').value);
     const qty = parseFloat(document.getElementById('addQty').value);
     const type = document.getElementById('addType').value;
@@ -840,12 +863,64 @@ async function manualAdd() {
         showToast('오류', '가격과 수량을 입력하세요', 'warning');
         return;
     }
-    const res = await fetchJson('/api/add', { symbol, price, qty, type });
+    const res = await fetchJson('/api/add', { symbol, price, qty, type, entry_date: addDate });
     if (res.error) {
         showToast('차단', res.error, 'warning');
     } else {
         showToast('추가진입', `${type === 'pyramid' ? '피라미딩' : '물타기'} 완료`, 'success');
+        document.getElementById('addPrice').value = '';
+        document.getElementById('addQty').value = '';
+        document.getElementById('addDate').value = '';
         loadTradeStatus();
+    }
+}
+
+// 추가진입 유형 설명 동적 업데이트
+function updateAddTypeExpl() {
+    const type = document.getElementById('addType').value;
+    const priceInput = parseFloat(document.getElementById('addPrice').value) || 0;
+    const explDiv = document.getElementById('typeExpl');
+    const comparePriceSpan = document.getElementById('comparePrice');
+    const currentAvgSpan = document.getElementById('currentAvg');
+    
+    if (window._currentPosition) {
+        const pos = window._currentPosition;
+        const avg = pos.entry_price;
+        currentAvgSpan.textContent = avg.toLocaleString();
+        
+        if (priceInput > 0) {
+            comparePriceSpan.textContent = priceInput.toLocaleString();
+            
+            if (type === 'pyramid') {
+                if (pos.direction === 'long') {
+                    if (priceInput > avg) {
+                        explDiv.innerHTML = `<span class="text-success">✅ 좋음: 롱 포지션이므로 더 높은 가격(${priceInput})에서 추가하면 좋습니다</span>`;
+                    } else {
+                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 롱은 오르는 추세에서 추가하는 게 맞습니다. 이 가격은 "물타기"입니다</span>`;
+                    }
+                } else {
+                    if (priceInput < avg) {
+                        explDiv.innerHTML = `<span class="text-success">✅ 좋음: 숏 포지션이므로 더 낮은 가격(${priceInput})에서 추가하면 좋습니다</span>`;
+                    } else {
+                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 숏은 내려가는 추세에서 추가하는 게 맞습니다. 이 가격은 "물타기"입니다</span>`;
+                    }
+                }
+            } else {
+                if (pos.direction === 'long') {
+                    if (priceInput < avg) {
+                        explDiv.innerHTML = `<span class="text-info">📉 물타기: 롱 손실 상황에서 더 낮은 가격(${priceInput})에서 추가 (리스크O)</span>`;
+                    } else {
+                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 물타기는 손실 방향에서만 가능합니다</span>`;
+                    }
+                } else {
+                    if (priceInput > avg) {
+                        explDiv.innerHTML = `<span class="text-info">📈 물타기: 숏 손실 상황에서 더 높은 가격(${priceInput})에서 추가 (리스크O)</span>`;
+                    } else {
+                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 물타기는 손실 방향에서만 가능합니다</span>`;
+                    }
+                }
+            }
+        }
     }
 }
 
