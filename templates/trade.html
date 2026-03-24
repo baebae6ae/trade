@@ -64,15 +64,15 @@
         <!-- 왼쪽: 차트 -->
         <div class="col-lg-8">
             <!-- 현재 종목 정보 -->
-            <div class="d-flex justify-content-between align-items-center mb-2" id="tickerBar" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-dark rounded" id="tickerBar" style="display:none;">
                 <div>
-                    <span class="fw-bold fs-5" id="tickerSymbolDisplay">--</span>
-                    <span class="text-muted ms-2" id="tickerNameDisplay"></span>
+                    <span class="fw-bold fs-5" id="tickerSymbolDisplay" title="종목 코드">--</span>
+                    <span class="text-muted ms-2" id="tickerNameDisplay" title="종목 이름"></span>
                 </div>
                 <div>
-                    <span class="fs-5 fw-bold" id="currentPriceDisplay">--</span>
-                    <span class="badge bg-primary ms-1" id="chartBarCount">0봉</span>
-                    <span class="badge bg-secondary ms-1" id="chartAtr">ATR: --</span>
+                    <span class="fs-5 fw-bold me-2" id="currentPriceDisplay" title="현재 가격">--</span>
+                    <span class="badge bg-info" id="chartBarCount" title="불러온 데이터 개수">0봉</span>
+                    <span class="badge bg-secondary ms-1" id="chartAtr" title="변동성 지표">ATR: --</span>
                 </div>
             </div>
 
@@ -89,105 +89,126 @@
             <!-- 수동 진입 / 청산 -->
             <div class="card mb-3">
                 <div class="card-header">
-                    <i class="bi bi-door-open me-2"></i>포지션 관리
+                    <i class="bi bi-door-open me-2"></i>내 포지션 입력
                 </div>
                 <div class="card-body">
                     <div id="entrySection">
+                        <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>지금 내가 가진 포지션(배팅) 정보를 입력하세요</p>
                         <div class="row g-2 mb-2">
                             <div class="col-6">
-                                <label class="form-label small">진입 날짜</label>
+                                <label class="form-label small fw-bold">진입 날짜</label>
                                 <input type="date" class="form-control form-control-sm" id="entryDate">
+                                <div class="form-text">내가 산(샀) 날짜</div>
                             </div>
                             <div class="col-6">
-                                <label class="form-label small">방향</label>
+                                <label class="form-label small fw-bold">방향</label>
                                 <select class="form-select form-select-sm" id="entryDirection">
-                                    <option value="long">롱 (매수)</option>
-                                    <option value="short">숏 (매도)</option>
+                                    <option value="long">상승 예상 (샀음)</option>
+                                    <option value="short">하락 예상 (팔았음)</option>
                                 </select>
+                                <div class="form-text">주가가 오를 거 같나? 내릴 거 같나?</div>
                             </div>
                         </div>
-                        <div class="row g-2 mb-2">
+                        <div class="row g-2 mb-3">
                             <div class="col-6">
-                                <label class="form-label small">진입가</label>
-                                <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="현재가">
+                                <label class="form-label small fw-bold">산 가격</label>
+                                <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="예: 50000">
+                                <div class="form-text">내가 산 가격이 얼마였나?</div>
                             </div>
                             <div class="col-6">
-                                <label class="form-label small">수량 (0=자동)</label>
-                                <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0">
+                                <label class="form-label small fw-bold">수량</label>
+                                <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0" placeholder="예: 100주">
+                                <div class="form-text">빈칸으로 두면 자동 계산</div>
                             </div>
                         </div>
                         <button class="btn btn-success btn-sm w-100 mb-2" onclick="manualEntry()">
-                            <i class="bi bi-box-arrow-in-right me-1"></i>진입 실행
+                            <i class="bi bi-check-circle me-1"></i>이 포지션으로 관리 시작
                         </button>
                     </div>
                     <hr class="my-2">
                     <div id="closeSection">
+                        <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>포지션을 팔(청산)려면:</p>
                         <div class="mb-2">
-                            <label class="form-label small">청산 가격 (0=최근 종가)</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="closePrice" value="0">
+                            <label class="form-label small fw-bold">몇 가격에 팔 건가요?</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="closePrice" value="0" placeholder="예: 55000">
+                            <div class="form-text">0 입력 하면 현재가</div>
                         </div>
                         <button class="btn btn-danger btn-sm w-100" onclick="manualClose()">
-                            <i class="bi bi-box-arrow-right me-1"></i>수동 청산
+                            <i class="bi bi-x-circle me-1"></i>지금 팔기
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- 수동 추가진입 -->
+            <!-- 추가진입 -->
             <div class="card mb-3">
                 <div class="card-header">
-                    <i class="bi bi-plus-circle me-2"></i>추가진입
+                    <i class="bi bi-plus-circle me-2"></i>추가로 더 사기
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>목표 가격에 추가로 더 샀을 때, 여기에 입력하세요</p>
                     <div class="row g-2 mb-2">
                         <div class="col-4">
                             <label class="form-label small">가격</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice">
+                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice" placeholder="예: 48000">
+                            <div class="form-text">샀던 가격</div>
                         </div>
                         <div class="col-4">
                             <label class="form-label small">수량</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addQty">
+                            <input type="number" step="any" class="form-control form-control-sm" id="addQty" placeholder="예: 100">
+                            <div class="form-text">몇 주를 샀나</div>
                         </div>
                         <div class="col-4">
                             <label class="form-label small">유형</label>
                             <select class="form-select form-select-sm" id="addType">
-                                <option value="pyramid">피라미딩</option>
-                                <option value="avg_down">물타기</option>
+                                <option value="pyramid">추가 진입</option>
+                                <option value="avg_down">손절치고 다시</option>
                             </select>
+                            <div class="form-text" title="추가진입: 같은 손절 / 손절치고 다시: 새로운 손절">어떤 건가요?</div>
                         </div>
                     </div>
                     <button class="btn btn-info btn-sm w-100" onclick="manualAdd()">
-                        <i class="bi bi-plus me-1"></i>추가진입
+                        <i class="bi bi-plus me-1"></i>추가 진입 기록
                     </button>
                 </div>
             </div>
 
             <!-- 거래 상태 패널 -->
             <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between">
-                    <span><i class="bi bi-info-circle me-2"></i>거래 상태</span>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-speedometer2 me-2"></i>거래 현황판</span>
                     <span class="badge" id="tradeStatusBadge">대기</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="trade-status-panel" id="tradeStatusPanel">
                         <table class="table table-sm table-dark mb-0">
                             <tbody id="statusTableBody">
-                                <tr><td class="text-muted" colspan="2">거래 없음</td></tr>
+                                <tr><td class="text-muted" colspan="2">포지션이 없습니다</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="p-3 bg-dark border-top small text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        <strong>설명:</strong> 
+                        위 표의 각 항목에 마우스를 올리면 설명이 나옵니다. 
+                        특히 "활성 손절가"는 지금 가격이 여기까지 떨어지면 자동으로 팝니다.
                     </div>
                 </div>
             </div>
 
             <!-- 이벤트 로그 -->
             <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                    <span><i class="bi bi-journal-text me-2"></i>이벤트 로그</span>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-hourglass-split me-2"></i>거래 기록</span>
                     <span class="badge bg-secondary" id="eventLogCount">0</span>
                 </div>
                 <div class="card-body p-0">
-                    <div class="event-list" id="eventLog" style="max-height: 250px;">
-                        <div class="text-center text-muted py-3">이벤트 없음</div>
+                    <div class="event-list bg-dark" id="eventLog" style="max-height: 280px; overflow-y: auto;">
+                        <div class="text-center text-muted py-4 small"><i class="bi bi-inbox me-1"></i>거래 기록이 없습니다</div>
+                    </div>
+                    <div class="p-2 bg-dark border-top small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>뜻:</strong> 🔓 진입=살 때 / ❌ 손절=손실 제한 / 🎯 준비=자동 기능 준비됨 / 🔒 청산=팔 때
                     </div>
                 </div>
             </div>
@@ -372,46 +393,130 @@ function updateTradePanel(data) {
     const tbody = document.getElementById('statusTableBody');
 
     if (trade.active) {
-        const dir = trade.direction === 'long' ? '롱' : '숏';
-        badge.textContent = `${dir} 거래중`;
+        const dir = trade.direction === 'long' ? '상승 예상' : '하락 예상';
+        const dirIcon = trade.direction === 'long' ? '📈' : '📉';
+        badge.textContent = `${dirIcon} ${dir} 거래중`;
         badge.className = `badge ${trade.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
 
         tbody.innerHTML = `
-            <tr><td>방향</td><td class="fw-bold">${dir}</td></tr>
-            <tr><td>진입가</td><td>${trade.entry_price.toFixed(2)}</td></tr>
-            <tr><td>평균단가</td><td>${trade.avg_entry.toFixed(2)}</td></tr>
-            <tr><td>수량</td><td>${trade.total_qty}</td></tr>
-            <tr><td>보유 봉수</td><td>${trade.bars_in_trade}</td></tr>
-            <tr><td>초기 손절</td><td class="text-danger">${trade.initial_stop.toFixed(2)}</td></tr>
-            <tr><td>추적 손절</td><td class="text-warning">${trade.trailing_stop > 0 ? trade.trailing_stop.toFixed(2) : '--'}</td></tr>
-            <tr><td>본전 손절</td><td class="text-info">${trade.breakeven_stop > 0 ? trade.breakeven_stop.toFixed(2) : '--'}</td></tr>
-            <tr><td class="fw-bold">활성 손절</td><td class="fw-bold">${trade.active_stop.toFixed(2)}</td></tr>
-            <tr><td>MFE / MAE</td><td><span class="text-success">${trade.mfe.toFixed(2)}</span> / <span class="text-danger">${trade.mae.toFixed(2)}</span> ATR</td></tr>
-            <tr><td>Trail Armed</td><td>${trade.trail_armed ? '<span class="text-success">✓</span>' : '<span class="text-muted">--</span>'}</td></tr>
-            <tr><td>Break-even</td><td>${trade.breakeven_active ? '<span class="text-success">✓</span>' : '<span class="text-muted">--</span>'}</td></tr>
-            <tr><td>미실현 손익</td><td class="${trade.unrealized_pnl >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(trade.unrealized_pnl)} (${trade.unrealized_pnl_pct.toFixed(2)}%)</td></tr>
-            <tr><td>R 배수</td><td>${trade.r_multiple.toFixed(2)}</td></tr>
-            <tr><td>현재 리스크</td><td>${formatCurrency(trade.current_risk)}</td></tr>
-            <tr><td>피라미딩</td><td>${trade.pyramid_count}회</td></tr>
-            <tr><td>물타기</td><td>${trade.avg_down_count}회</td></tr>
-            <tr><td>Entry ATR</td><td>${trade.entry_atr.toFixed(4)}</td></tr>
+<!-- ═══ 내 포지션 ═══ -->
+<tr class="table-primary"><td colspan="2"><strong>내 포지션</strong></td></tr>
+<tr>
+    <td width="40%"><span title="상승 또는 하락을 예상했나요?">방향</span></td>
+    <td class="fw-bold">${dirIcon} ${dir}</td>
+</tr>
+<tr>
+    <td><span title="처음 샀을 때 가격">산 가격</span></td>
+    <td>${trade.entry_price.toFixed(2)}</td>
+</tr>
+<tr>
+    <td><span title="여러 번 샀다면 평균 가격">평균 단가</span></td>
+    <td>${trade.avg_entry.toFixed(2)}</td>
+</tr>
+<tr>
+    <td><span title="지금 몇 개를 가지고 있나?">보유 수량</span></td>
+    <td>${trade.total_qty.toLocaleString()}</td>
+</tr>
+<tr>
+    <td><span title="지금까지 몇 봉(일/시간)을 보유했나?">보유 기간</span></td>
+    <td>${trade.bars_in_trade}봉</td>
+</tr>
+
+<!-- ═══ 손절 정보 (손실 제한) ═══ -->
+<tr class="table-danger"><td colspan="2"><strong>손실 제한 (손절)</strong></td></tr>
+<tr>
+    <td><span title="처음 정한 손실 한계 가격">초기 손절가</span></td>
+    <td class="text-danger">${trade.initial_stop.toFixed(2)}</td>
+</tr>
+<tr>
+    <td><span title="지금 현재 적용되는 손실 한계 가격 (여기까지 떨어지면 자동으로 팜)">활성 손절가</span></td>
+    <td class="fw-bold text-danger">${trade.active_stop.toFixed(2)}</td>
+</tr>
+<tr>
+    <td><span title="주가가 올라가면서 손절가도 같이 올라가는 상태">추적 손절</span></td>
+    <td class="text-warning">${trade.trailing_stop > 0 ? trade.trailing_stop.toFixed(2) : '아직'}</td>
+</tr>
+<tr>
+    <td><span title="손절이 내가 산 가격으로 올라간 상태 (손실 없음)">본전 보호</span></td>
+    <td class="text-info">${trade.breakeven_stop > 0 ? trade.breakeven_stop.toFixed(2) : '아직'}</td>
+</tr>
+
+<!-- ═══ 거래 성과 ═══ -->
+<tr class="table-info"><td colspan="2"><strong>거래 성과</strong></td></tr>
+<tr>
+    <td><span title="지금 팔면 얼마 벌고 잃을까? (아직 팔지 않음)">미실현 손익</span></td>
+    <td class="${trade.unrealized_pnl >= 0 ? 'text-success fw-bold' : 'text-danger fw-bold'}">
+        ${formatCurrency(trade.unrealized_pnl)} (${trade.unrealized_pnl_pct.toFixed(2)}%)
+    </td>
+</tr>
+<tr>
+    <td><span title="손실과 비교했을 때 수익이 몇 배인가? (1.5배면 손실의 1.5배를 버는 거)">R 배수</span></td>
+    <td>${trade.r_multiple.toFixed(2)}배</td>
+</tr>
+<tr>
+    <td><span title="지금까지 최고로 올랐던 것 (수익). 단위 = 손실">최대 수익 (MFE)</span></td>
+    <td class="text-success">${trade.mfe.toFixed(2)} ATR</td>
+</tr>
+<tr>
+    <td><span title="지금까지 최악으로 내렸던 것 (손실). 단위 = 손실">최대 손실 (MAE)</span></td>
+    <td class="text-danger">${trade.mae.toFixed(2)} ATR</td>
+</tr>
+
+<!-- ═══ 거래 진행 상황 ═══ -->
+<tr class="table-secondary"><td colspan="2"><strong>거래 진행</strong></td></tr>
+<tr>
+    <td><span title="같은 손절로 추가로 샀나?">추가 진입</span></td>
+    <td>${trade.pyramid_count}회</td>
+</tr>
+<tr>
+    <td><span title="손절 후에 다시 샀나?">손절 후 추매</span></td>
+    <td>${trade.avg_down_count}회</td>
+</tr>
+<tr>
+    <td><span title="지금 내가 감수하는 손실액">현재 리스크</span></td>
+    <td>${formatCurrency(trade.current_risk)}</td>
+</tr>
+<tr>
+    <td><span title="진입했을 때의 변동성 (이것이 손절 크기를 정함)">진입시 변동성 (ATR)</span></td>
+    <td>${trade.entry_atr.toFixed(4)}</td>
+</tr>
+
+<!-- ═══ 자동 관리 상태 ═══ -->
+<tr class="table-secondary"><td colspan="2"><strong>자동 관리</strong></td></tr>
+<tr>
+    <td><span title="주가 올라갈 때 손절가도 같이 올라가는 기능이 켜졌나?">추적 손절 준비</span></td>
+    <td>${trade.trail_armed ? '<span class="text-success">✓ 켜짐</span>' : '<span class="text-muted">아직 아님</span>'}</td>
+</tr>
+<tr>
+    <td><span title="손절이 진입가로 올라가는 기능이 켜졌나?">본전 보호 준비</span></td>
+    <td>${trade.breakeven_active ? '<span class="text-success">✓ 켜짐</span>' : '<span class="text-muted">아직 아님</span>'}</td>
+</tr>
         `;
 
         // 이벤트 로그
         if (trade.events && trade.events.length > 0) {
             document.getElementById('eventLogCount').textContent = trade.events.length;
-            document.getElementById('eventLog').innerHTML = trade.events.slice(-30).reverse().map(e =>
-                `<div class="event-item event-${e.type}">
-                    <span class="event-badge">${eventIcon(e.type)}</span>
-                    <span class="event-msg">${e.message}</span>
-                    <span class="event-time">#${e.bar}</span>
-                </div>`
-            ).join('');
+            document.getElementById('eventLog').innerHTML = trade.events.slice(-30).reverse().map(e => {
+                let icon = '📌';
+                if (e.type === 'entry') icon = '🔓 진입';
+                else if (e.type === 'stop_hit') icon = '❌ 손절';
+                else if (e.type === 'trail_armed') icon = '🎯 주문 준비';
+                else if (e.type === 'breakeven') icon = '🛡️ 보호';
+                else if (e.type === 'trailing_stop') icon = '📉 추적';
+                else if (e.type === 'exit') icon = '🔒 청산';
+                else if (e.type === 'add') icon = '➕ 추가';
+                
+                return `<div class="event-item event-${e.type} small border-bottom py-2">
+                    <strong>${icon}</strong>
+                    <span>${e.message}</span>
+                    <span class="text-muted float-end">#${e.bar}</span>
+                </div>`;
+            }).join('');
         }
     } else {
-        badge.textContent = '대기';
+        badge.textContent = '대기 중';
         badge.className = 'badge bg-secondary';
-        tbody.innerHTML = '<tr><td class="text-muted" colspan="2">거래 없음</td></tr>';
+        tbody.innerHTML = '<tr><td class="text-muted" colspan="2"><i class="bi bi-clock me-1"></i>포지션이 없습니다. 위의 "내 포지션 입력"에서 시작하세요!</td></tr>';
     }
 
     // 차트 정보
@@ -421,10 +526,10 @@ function updateTradePanel(data) {
     // 네비 업데이트
     const navEl = document.getElementById('navStatus');
     if (trade.active) {
-        navEl.textContent = trade.direction === 'long' ? '롱 거래중' : '숏 거래중';
+        navEl.textContent = trade.direction === 'long' ? '📈 거래중' : '📉 거래중';
         navEl.className = `badge ${trade.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
     } else {
-        navEl.textContent = '대기';
+        navEl.textContent = '⏸️ 대기';
         navEl.className = 'badge bg-secondary';
     }
     document.getElementById('navAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
@@ -467,7 +572,7 @@ function drawPriceChart(chartData) {
 
     const datasets = [
         {
-            label: '종가',
+            label: '종가 (현재 가격)',
             data: closes,
             borderColor: '#6ea8fe',
             backgroundColor: 'rgba(110,168,254,0.1)',
@@ -477,7 +582,7 @@ function drawPriceChart(chartData) {
             borderWidth: 2,
         },
         {
-            label: '고가',
+            label: '고가 (최고 가격)',
             data: highs,
             borderColor: 'rgba(25,135,84,0.3)',
             fill: false,
@@ -486,7 +591,7 @@ function drawPriceChart(chartData) {
             borderDash: [2, 2],
         },
         {
-            label: '저가',
+            label: '저가 (최저 가격)',
             data: lows,
             borderColor: 'rgba(220,53,69,0.3)',
             fill: false,
@@ -518,7 +623,7 @@ function drawPriceChart(chartData) {
         }
 
         datasets.push({
-            label: '활성 손절',
+            label: '손실 한계선 (현재 적용)',
             data: activeStops,
             borderColor: '#ff6b6b',
             borderWidth: 2,
@@ -527,7 +632,7 @@ function drawPriceChart(chartData) {
             spanGaps: true,
         });
         datasets.push({
-            label: '초기 손절',
+            label: '처음 설정한 손실선',
             data: initStops,
             borderColor: 'rgba(220,53,69,0.4)',
             borderWidth: 1,
@@ -537,7 +642,7 @@ function drawPriceChart(chartData) {
             spanGaps: true,
         });
         datasets.push({
-            label: '추적 손절',
+            label: '주가 올라가면서 함께 올린 손실선',
             data: trailStops,
             borderColor: 'rgba(255,193,7,0.6)',
             borderWidth: 1,
@@ -549,7 +654,7 @@ function drawPriceChart(chartData) {
 
         if (chartData.entry_price > 0) {
             datasets.push({
-                label: '진입가',
+                label: '샀을 때 평균 가격',
                 data: new Array(bars.length).fill(chartData.entry_price),
                 borderColor: 'rgba(13,202,240,0.5)',
                 borderWidth: 1,
@@ -568,7 +673,7 @@ function drawPriceChart(chartData) {
             if (f.bar < bars.length) fillData[f.bar] = f.price;
         });
         datasets.push({
-            label: '체결',
+            label: '매매 기록 (샀을 때)',
             data: fillData,
             borderColor: '#ffc107',
             backgroundColor: '#ffc107',
