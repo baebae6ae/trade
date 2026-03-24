@@ -225,7 +225,7 @@ def api_upload_csv():
 
 @app.route("/api/entry", methods=["POST"])
 def api_manual_entry():
-    """수동 진입"""
+    """수동 진입 (포트폴리오 지원)"""
     data = request.get_json()
     if not data:
         return jsonify({"error": "데이터가 없습니다"}), 400
@@ -233,17 +233,18 @@ def api_manual_entry():
     price = float(data.get("price", 0))
     qty = float(data.get("qty", 0))
     entry_date = data.get("entry_date", "")
+    symbol = data.get("symbol", "")  # 포트폴리오 심볼
     if price <= 0:
         return jsonify({"error": "가격을 입력하세요"}), 400
 
-    result = engine.manual_entry(price, qty, entry_date=entry_date)
+    result = engine.manual_entry(price, qty, entry_date=entry_date, symbol=symbol)
     _save()
     return jsonify(result)
 
 
 @app.route("/api/add", methods=["POST"])
 def api_manual_add():
-    """수동 추가진입"""
+    """수동 추가진입 (포트폴리오 지원)"""
     data = request.get_json()
     if not data:
         return jsonify({"error": "데이터가 없습니다"}), 400
@@ -251,31 +252,35 @@ def api_manual_add():
     price = float(data.get("price", 0))
     qty = float(data.get("qty", 0))
     add_type = data.get("type", "pyramid")
+    symbol = data.get("symbol", "")  # 포트폴리오 심볼
 
     if price <= 0 or qty <= 0:
         return jsonify({"error": "가격과 수량을 입력하세요"}), 400
     if add_type not in ("pyramid", "avg_down"):
         return jsonify({"error": "유형은 pyramid 또는 avg_down"}), 400
 
-    result = engine.manual_add(price, qty, add_type)
+    result = engine.manual_add(price, qty, add_type, symbol=symbol)
     _save()
     return jsonify(result)
 
 
 @app.route("/api/close", methods=["POST"])
 def api_manual_close():
-    """수동 청산"""
+    """수동 청산 (포트폴리오 지원)"""
     data = request.get_json() or {}
     price = float(data.get("price", 0))
-    result = engine.manual_close(price)
+    symbol = data.get("symbol", "")  # 포트폴리오 심볼
+    result = engine.manual_close(price, symbol=symbol)
     _save()
     return jsonify(result)
 
 
 @app.route("/api/reset", methods=["POST"])
 def api_reset():
-    """거래 리셋 (가격 데이터 유지)"""
-    engine.reset()
+    """거래 리셋 (가격 데이터 유지, 포트폴리오 지원)"""
+    data = request.get_json() or {}
+    symbol = data.get("symbol", "")
+    engine.reset(symbol=symbol)
     _save()
     return jsonify({"success": True})
 
@@ -289,6 +294,37 @@ def api_full_reset():
     return jsonify({"success": True})
 
 
+@app.route("/api/positions")
+def api_positions():
+    """모든 활성 포지션 목록 반환"""
+    positions = []
+    for symbol, state in engine.states.items():
+        if state.active:
+            positions.append({
+                "symbol": symbol,
+                "direction": state.direction,
+                "qty": state.total_qty,
+                "entry_price": round(state.avg_entry, 6) if state.avg_entry > 0 else 0,
+                "unrealized_pnl": round(state.unrealized_pnl, 2),
+                "unrealized_pnl_pct": round(state.unrealized_pnl_pct, 2),
+                "bars_in_trade": state.bars_in_trade,
+            })
+    return jsonify({"positions": positions, "count": len(positions)})
+
+
+@app.route("/api/position/<symbol>")
+def api_position(symbol):
+    """특정 심볼 포지션 상세 조회"""
+    if symbol not in engine.states:
+        return jsonify({"error": f"포지션 '{symbol}' 없음"}), 404
+    
+    state = engine.states[symbol]
+    if not state.active:
+        return jsonify({"error": f"포지션 '{symbol}' 비활성"}), 404
+    
+    return jsonify(state.to_dict())
+
+
 @app.route("/api/history")
 def api_history():
     return jsonify(engine.trade_history)
@@ -296,7 +332,11 @@ def api_history():
 
 @app.route("/api/events")
 def api_events():
-    return jsonify(engine.state.events[-200:])
+    """현재 심볼의 이벤트 로그 조회"""
+    state = engine.state  # current_symbol의 상태
+    if state:
+        return jsonify(state.events[-200:])
+    return jsonify([])
 
 
 # ─── 시장 데이터 API ────────────────────────────────────────

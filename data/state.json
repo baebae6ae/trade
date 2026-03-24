@@ -1685,8 +1685,8 @@
       "open": 18550.0,
       "high": 19240.0,
       "low": 18020.0,
-      "close": 19070.0,
-      "volume": 59006.0
+      "close": 18290.0,
+      "volume": 89197.0
     }
   ],
   "atr_values": [
@@ -1893,14 +1893,16 @@
   ],
   "trade_history": [],
   "bar_index": 199,
+  "current_symbol": "",
+  "states": {},
   "ticker_info": {
     "symbol": "064850.KQ",
     "name": "FnGuide",
     "currency": "KRW",
     "exchange": "KOE",
-    "market_price": 19070.0,
+    "market_price": 18290.0,
     "previous_close": 18110.0,
-    "market_cap": 217595035648,
+    "market_cap": 208694968320,
     "sector": "Financial Services"
   }
 }

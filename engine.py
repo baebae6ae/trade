@@ -428,7 +428,12 @@ class TradeEngine:
         self.config = deepcopy(DEFAULT_CONFIG)
         if config:
             self.config.update(config)
-        self.state = TradeState()
+        # 포트폴리오: 종목 코드별로 여러 포지션 관리
+        self.states: Dict[str, TradeState] = {}  # symbol -> TradeState
+        self.current_symbol: str = ""  # 현재 작업 중인 종목
+        # 하위호환성을 위해 state 프로퍼티도 유지
+        self._legacy_state = TradeState()
+        
         self.bars: List[Bar] = []
         self.atr_values: List[float] = []
         self.current_atr = 0.0
@@ -436,6 +441,32 @@ class TradeEngine:
         self.bar_index = 0
         self.entry_pending = False
         self.manual_touch_occurred = False
+
+    @property
+    def state(self) -> TradeState:
+        """현재 활성 포지션 또는 마지막 작업 포지션 반환 (하위호환성)"""
+        if self.current_symbol and self.current_symbol in self.states:
+            return self.states[self.current_symbol]
+        # 활성 포지션이 하나만 있으면 그것 반환
+        active = [s for s in self.states.values() if s.active]
+        if len(active) == 1:
+            return active[0]
+        return self._legacy_state
+    
+    @state.setter
+    def state(self, value: TradeState):
+        """하위호환성을 위한 setter (deprecated)"""
+        if self.current_symbol:
+            self.states[self.current_symbol] = value
+        else:
+            self._legacy_state = value
+
+    def _get_or_create_state(self, symbol: str) -> TradeState:
+        """종목의 거래 상태를 가져오거나 새로 생성"""
+        if symbol not in self.states:
+            self.states[symbol] = TradeState()
+        self.current_symbol = symbol
+        return self.states[symbol]
 
     # ── ATR 계산 ──────────────────────────────────────────
 
@@ -1000,8 +1031,8 @@ class TradeEngine:
 
     # ── 거래 종료 ─────────────────────────────────────────
 
-    def _close_trade(self, exit_price: float, reason: str) -> dict:
-        s = self.state
+    def _close_trade(self, exit_price: float, reason: str, symbol: str = "default") -> dict:
+        s = self.states.get(symbol, self.state)
         summary = TradeSummary()
         summary.direction = s.direction
         summary.entry_price = s.entry_price
@@ -1038,8 +1069,9 @@ class TradeEngine:
                         f"| {reason}")
 
         result = summary.to_dict()
+        result["symbol"] = symbol  # 거래 기록에 종목 코드 추가
         self.trade_history.append(result)
-        self.state.reset()
+        s.reset()
         return result
 
     # ── 메인 업데이트 루프 ────────────────────────────────
@@ -1255,9 +1287,11 @@ class TradeEngine:
 
     # ── 직접 진입 (UI에서 호출) ───────────────────────────
 
-    def manual_entry(self, price: float, qty: float = 0, entry_date: str = ""):
+    def manual_entry(self, price: float, qty: float = 0, entry_date: str = "", symbol: str = ""):
         """UI에서 직접 진입 실행. entry_date가 주어지면 해당 날짜 봉을 기준으로 진입."""
-        if self.state.active:
+        s = self._get_or_create_state(symbol or self.current_symbol or "default")
+        
+        if s.active:
             return {"error": "이미 활성 거래가 있습니다"}
         if not self.bars:
             return {"error": "가격 데이터가 없습니다"}
@@ -1284,7 +1318,6 @@ class TradeEngine:
             if not found:
                 return {"error": f"'{entry_date}' 날짜의 봉 데이터를 찾을 수 없습니다"}
 
-        s = self.state
         s.active = True
         s.direction = cfg["position_direction"]
         s.entry_price = price
@@ -1343,9 +1376,10 @@ class TradeEngine:
 
         return {"success": True, "state": s.to_dict()}
 
-    def manual_add(self, price: float, qty: float, add_type: str = "pyramid") -> dict:
+    def manual_add(self, price: float, qty: float, add_type: str = "pyramid", symbol: str = "") -> dict:
         """UI에서 직접 추가진입"""
-        if not self.state.active:
+        s = self._get_or_create_state(symbol or self.current_symbol or "default")
+        if not s.active:
             return {"error": "활성 거래가 없습니다"}
 
         handling = self.config.get(f"{add_type}_stop_handling",
@@ -1353,31 +1387,38 @@ class TradeEngine:
         if handling == "block":
             return {"error": f"{add_type} 추가진입이 차단되어 있습니다"}
 
-        allowed, reason = self._check_scale_in_gates(add_type, price, qty)
+        allowed, reason = self._check_scale_in_gates(add_type, price, qty, s)
         if not allowed:
             return {"error": reason}
 
-        self._execute_scale_in(price, qty, add_type, "수동")
-        return {"success": True, "state": self.state.to_dict()}
+        self._execute_scale_in(price, qty, add_type, "수동", s)
+        return {"success": True, "state": s.to_dict()}
 
-    def manual_close(self, price: float = 0) -> dict:
+    def manual_close(self, price: float = 0, symbol: str = "") -> dict:
         """UI에서 직접 청산"""
-        if not self.state.active:
+        s = self._get_or_create_state(symbol or self.current_symbol or "default")
+        if not s.active:
             return {"error": "활성 거래가 없습니다"}
         if price <= 0 and self.bars:
             price = self.bars[-1].close
-        result = self._close_trade(price, "수동청산")
+        result = self._close_trade(price, "수동청산", symbol or self.current_symbol or "default")
         return {"success": True, "summary": result}
 
     # ── 리셋 ──────────────────────────────────────────────
 
-    def reset(self):
-        self.state.reset()
+    def reset(self, symbol: str = ""):
+        """현재 또는 지정된 포지션 리셋"""
+        sym = symbol or self.current_symbol or "default"
+        if sym in self.states:
+            self.states[sym].reset()
         self.entry_pending = False
         self.manual_touch_occurred = False
 
     def full_reset(self):
-        self.state.reset()
+        """모든 포지션 및 데이터 리셋"""
+        self.states.clear()
+        self._legacy_state.reset()
+        self.current_symbol = ""
         self.bars.clear()
         self.atr_values.clear()
         self.current_atr = 0.0
@@ -1388,13 +1429,27 @@ class TradeEngine:
     # ── 상태 조회 ─────────────────────────────────────────
 
     def get_status(self) -> dict:
+        # 현재 활성 포지션들을 모두 반환
+        trades = {}
+        for symbol, state in self.states.items():
+            if state.active or symbol == self.current_symbol:
+                trades[symbol] = state.to_dict()
+        
+        # 하위호환성: 단一 포지션의 경우 "trade" 키도 제공
+        if not trades and self.current_symbol in self.states:
+            trades[self.current_symbol] = self.states[self.current_symbol].to_dict()
+        
+        current_trade = self.state.to_dict() if self.state.active else None
+        
         return {
-            "trade": self.state.to_dict(),
+            "trade": current_trade,  # 하위호환성 (현재 활성 포지션)
+            "trades": trades,  # 새로운 구조 (모든 포지션)
             "atr": _safe_float(round(self.current_atr, 6)),
             "bar_count": len(self.bars),
             "bar_index": self.bar_index,
             "config": self.config,
             "trade_history": self.trade_history[-20:],
+            "current_symbol": self.current_symbol,
         }
 
     def get_chart_data(self) -> dict:
@@ -1447,12 +1502,17 @@ class TradeEngine:
     # ── 저장/불러오기 ─────────────────────────────────────
 
     def save_state(self, filepath: str):
+        # 모든 포지션 상태를 딕셔너리로 변환
+        states_data = {symbol: state.to_dict() for symbol, state in self.states.items()}
+        
         data = {
             "config": self.config,
             "bars": [b.to_dict() for b in self.bars],
             "atr_values": self.atr_values,
             "trade_history": self.trade_history,
             "bar_index": self.bar_index,
+            "current_symbol": self.current_symbol,
+            "states": states_data,  # 포트폴리오 처리
             "ticker_info": getattr(self, '_ticker_info', {}),
         }
         os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else ".", exist_ok=True)
@@ -1469,7 +1529,17 @@ class TradeEngine:
         self.atr_values = data.get("atr_values", [])
         self.trade_history = data.get("trade_history", [])
         self.bar_index = data.get("bar_index", 0)
+        self.current_symbol = data.get("current_symbol", "")
         self._ticker_info = data.get("ticker_info", {})
+        
+        # 포트폴리오 복원
+        states_data = data.get("states", {})
+        self.states.clear()
+        for symbol, state_dict in states_data.items():
+            state = TradeState()
+            state.from_dict_restore(state_dict)
+            self.states[symbol] = state
+        
         if self.atr_values:
             self.current_atr = self.atr_values[-1]
 
