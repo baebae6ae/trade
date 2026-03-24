@@ -1,0 +1,454 @@
+/* ── 거래 관리 시스템 스타일 ────────────────────────────── */
+
+:root {
+    --bg-main: #0d1117;
+    --bg-card: #161b22;
+    --bg-nav: #0d1117;
+    --bg-input: #21262d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-yellow: #d29922;
+    --accent-purple: #bc8cff;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    font-size: 0.9rem;
+}
+
+/* ── 네비게이션 ──────────────────────────────────────────── */
+
+.bg-nav {
+    background-color: var(--bg-nav) !important;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.navbar-brand {
+    color: var(--accent-blue) !important;
+    font-size: 1.1rem;
+}
+
+.nav-link {
+    color: var(--text-secondary) !important;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.8rem !important;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.nav-link:hover {
+    color: var(--text-primary) !important;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-link.active {
+    color: var(--accent-blue) !important;
+    background-color: rgba(88, 166, 255, 0.1);
+}
+
+/* ── 메인 콘텐츠 ─────────────────────────────────────────── */
+
+.main-content {
+    margin-top: 60px;
+    padding: 1.2rem;
+    min-height: calc(100vh - 60px);
+}
+
+/* ── 카드 ──────────────────────────────────────────────── */
+
+.card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.card-header {
+    background-color: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.6rem 1rem;
+}
+
+/* ── 통계 카드 ────────────────────────────────────────── */
+
+.stat-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.stat-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.2rem;
+}
+
+.stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-sub {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+}
+
+.stat-icon {
+    font-size: 1.8rem;
+    opacity: 0.6;
+}
+
+/* ── 정보 그룹 ────────────────────────────────────────── */
+
+.info-group {
+    padding: 0.4rem 0.6rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.info-label {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.info-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── 테이블 ───────────────────────────────────────────── */
+
+.table-dark {
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--border);
+}
+
+.table-dark td {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.table-dark th {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+.table-header-dark th {
+    background-color: rgba(255, 255, 255, 0.03);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.table-hover > tbody > tr:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* ── 이벤트 리스트 ─────────────────────────────────────── */
+
+.event-list {
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.event-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-size: 0.8rem;
+    transition: background 0.1s;
+}
+
+.event-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.event-badge {
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+}
+
+.event-msg {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.event-time {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.event-entry .event-badge { color: var(--accent-blue); }
+.event-exit .event-badge { color: var(--accent-red); }
+.event-trail_armed .event-badge { color: var(--accent-green); }
+.event-breakeven .event-badge { color: var(--accent-purple); }
+.event-scale_in .event-badge { color: var(--accent-yellow); }
+.event-blocked .event-badge { color: var(--accent-red); }
+
+/* ── 폼 ───────────────────────────────────────────────── */
+
+.form-control,
+.form-select {
+    background-color: var(--bg-input);
+    border-color: var(--border);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bg-input);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+}
+
+.form-control-sm {
+    padding: 0.3rem 0.5rem;
+}
+
+.form-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.2rem;
+}
+
+.form-text {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.form-check-input {
+    background-color: var(--bg-input);
+    border-color: var(--border);
+}
+
+.form-check-input:checked {
+    background-color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.form-check-label {
+    font-size: 0.82rem;
+}
+
+/* ── 아코디언 ─────────────────────────────────────────── */
+
+.accordion-item {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+
+.accordion-button {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.7rem 1rem;
+    box-shadow: none !important;
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: rgba(88, 166, 255, 0.05);
+    color: var(--accent-blue);
+}
+
+.accordion-button::after {
+    filter: brightness(0.6);
+}
+
+.accordion-body {
+    padding: 1rem;
+    background-color: var(--bg-card);
+}
+
+/* ── 버튼 ─────────────────────────────────────────────── */
+
+.btn-sm {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+}
+
+/* ── 배지 ─────────────────────────────────────────────── */
+
+.badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* ── 프로그레스 바 ────────────────────────────────────── */
+
+.progress {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+/* ── 거래 상태 패널 ───────────────────────────────────── */
+
+.trade-status-panel {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.trade-status-panel td:first-child {
+    color: var(--text-secondary);
+    width: 40%;
+}
+
+/* ── 스크롤바 ─────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── 토스트 ───────────────────────────────────────────── */
+
+.toast {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+}
+
+.toast-header {
+    background-color: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.toast-body {
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+/* ── 모달 ─────────────────────────────────────────────── */
+
+.modal-content.bg-dark {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border);
+}
+
+/* ── 반응형 ───────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .main-content {
+        padding: 0.8rem;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+    }
+
+    .navbar-brand {
+        font-size: 0.95rem;
+    }
+}
+
+/* ── 탭 ───────────────────────────────────────────────── */
+
+.nav-tabs .nav-link {
+    color: var(--text-secondary) !important;
+    border: none;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.7rem !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--accent-blue) !important;
+    background: transparent;
+    border-bottom: 2px solid var(--accent-blue);
+}
+
+.card-header-tabs {
+    margin-bottom: -0.6rem;
+}
+
+/* ── 알림 ─────────────────────────────────────────────── */
+
+.alert-sm {
+    font-size: 0.8rem;
+}
+
+/* ── 종목 검색 드롭다운 ───────────────────────────────── */
+
+#searchDropdown {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    position: absolute;
+    z-index: 1050;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+#searchDropdown .dropdown-item {
+    color: var(--text-primary);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--border-color);
+}
+#searchDropdown .dropdown-item:hover {
+    background: var(--bg-hover);
+    color: var(--accent-blue);
+}
+
+/* ── 유틸리티 ─────────────────────────────────────────── */
+
+.text-success { color: var(--accent-green) !important; }
+.text-danger { color: var(--accent-red) !important; }
+.text-warning { color: var(--accent-yellow) !important; }
+.text-info { color: var(--accent-purple) !important; }

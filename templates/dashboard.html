@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+{% block title %}대시보드 - 거래 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>대시보드</h4>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()">
+            <i class="bi bi-arrow-clockwise me-1"></i>새로고침
+        </button>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="stat-label">현재 상태</div>
+                            <div class="stat-value" id="dshStatus">대기</div>
+                        </div>
+                        <div class="stat-icon" id="dshStatusIcon">
+                            <i class="bi bi-pause-circle"></i>
+                        </div>
+                    </div>
+                    <div class="stat-sub" id="dshStatusSub">거래 없음</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="stat-label">미실현 손익</div>
+                            <div class="stat-value" id="dshPnl">₩0</div>
+                        </div>
+                        <div class="stat-icon text-info">
+                            <i class="bi bi-cash-stack"></i>
+                        </div>
+                    </div>
+                    <div class="stat-sub" id="dshPnlSub">R: 0.00</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="stat-label">현재 리스크</div>
+                            <div class="stat-value" id="dshRisk">₩0</div>
+                        </div>
+                        <div class="stat-icon text-warning">
+                            <i class="bi bi-shield-exclamation"></i>
+                        </div>
+                    </div>
+                    <div class="stat-sub" id="dshRiskSub">예산: --</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="stat-label">ATR</div>
+                            <div class="stat-value" id="dshAtr">--</div>
+                        </div>
+                        <div class="stat-icon text-secondary">
+                            <i class="bi bi-bar-chart-line"></i>
+                        </div>
+                    </div>
+                    <div class="stat-sub" id="dshAtrSub">봉 수: 0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 두 번째 행: 활성 거래 + 통계 -->
+    <div class="row g-3 mb-4">
+        <!-- 활성 거래 정보 -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-activity me-2"></i>활성 거래</span>
+                    <span class="badge" id="dshTradeDir">--</span>
+                </div>
+                <div class="card-body" id="dshActiveBody">
+                    <div id="dshNoTrade" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox display-4 d-block mb-2"></i>
+                        활성 거래가 없습니다
+                    </div>
+                    <div id="dshTradeInfo" style="display:none;">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="info-group">
+                                    <div class="info-label">진입가 (평균)</div>
+                                    <div class="info-value" id="dshEntry">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-group">
+                                    <div class="info-label">수량</div>
+                                    <div class="info-value" id="dshQty">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="info-group">
+                                    <div class="info-label">보유 봉 수</div>
+                                    <div class="info-value" id="dshBars">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">초기 손절</div>
+                                    <div class="info-value text-danger" id="dshInitStop">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">추적 손절</div>
+                                    <div class="info-value text-warning" id="dshTrailStop">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">활성 손절</div>
+                                    <div class="info-value fw-bold" id="dshActiveStop">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">본전 손절</div>
+                                    <div class="info-value text-info" id="dshBEStop">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">MFE (ATR)</div>
+                                    <div class="info-value text-success" id="dshMFE">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">MAE (ATR)</div>
+                                    <div class="info-value text-danger" id="dshMAE">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">Trail Armed</div>
+                                    <div class="info-value" id="dshArmed">--</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="info-group">
+                                    <div class="info-label">Break-even</div>
+                                    <div class="info-value" id="dshBE">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 추가진입 이력 -->
+                        <div class="mt-3" id="dshScaleInSection" style="display:none;">
+                            <h6 class="text-muted mb-2">추가진입 이력</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-dark">
+                                    <thead><tr>
+                                        <th>봉</th><th>유형</th><th>가격</th><th>수량</th><th>평균단가</th>
+                                    </tr></thead>
+                                    <tbody id="dshFillsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 거래 통계 -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-bar-chart me-2"></i>거래 통계
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">총 거래 수</div>
+                                <div class="info-value" id="dshTotal">0</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">승률</div>
+                                <div class="info-value" id="dshWinRate">0%</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">승 / 패</div>
+                                <div class="info-value" id="dshWL">0 / 0</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">총 손익</div>
+                                <div class="info-value" id="dshTotalPnl">₩0</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">평균 R</div>
+                                <div class="info-value" id="dshAvgR">0.00</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">Profit Factor</div>
+                                <div class="info-value" id="dshPF">0.00</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">평균 수익</div>
+                                <div class="info-value text-success" id="dshAvgWin">₩0</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">평균 손실</div>
+                                <div class="info-value text-danger" id="dshAvgLoss">₩0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 승패 차트 -->
+                    <div class="mt-3">
+                        <canvas id="dshWinChart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 세 번째 행: 적응형 관리 + 이벤트 -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-cpu me-2"></i>적응형 관리 상태
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">노이즈 점수</div>
+                                <div class="progress mt-1" style="height:6px;">
+                                    <div class="progress-bar bg-warning" id="dshNoiseProg" style="width:50%"></div>
+                                </div>
+                                <div class="info-value small" id="dshNoise">0.50</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">추세 효율</div>
+                                <div class="progress mt-1" style="height:6px;">
+                                    <div class="progress-bar bg-success" id="dshEffProg" style="width:50%"></div>
+                                </div>
+                                <div class="info-value small" id="dshEff">0.50</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">ATR 레짐</div>
+                                <div class="info-value" id="dshRegime">1.00</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">Arm 배율</div>
+                                <div class="info-value" id="dshArmMult">1.00</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">BE 배율</div>
+                                <div class="info-value" id="dshBEMult">1.00</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-group">
+                                <div class="info-label">Trail 배율</div>
+                                <div class="info-value" id="dshTrailMult">1.00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between">
+                    <span><i class="bi bi-list-check me-2"></i>최근 이벤트</span>
+                    <span class="badge bg-secondary" id="dshEventCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="event-list" id="dshEvents">
+                        <div class="text-center text-muted py-4">이벤트 없음</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 네 번째 행: 손익 차트 -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-graph-up me-2"></i>누적 손익 추이
+                </div>
+                <div class="card-body">
+                    <canvas id="dshPnlChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let winChart = null;
+let pnlChart = null;
+
+async function loadDashboard() {
+    try {
+        const [dashRes, statusRes] = await Promise.all([
+            fetch('/api/dashboard'),
+            fetch('/api/status')
+        ]);
+        const dash = await dashRes.json();
+        const status = await statusRes.json();
+
+        // 상태 카드
+        if (dash.active_trade) {
+            const t = dash.active_trade;
+            const dir = t.direction === 'long' ? '롱' : '숏';
+            document.getElementById('dshStatus').textContent = `${dir} 거래중`;
+            document.getElementById('dshStatusIcon').innerHTML = `<i class="bi bi-play-circle text-success"></i>`;
+            document.getElementById('dshStatusSub').textContent = `진입: ${t.entry_price.toFixed(2)} | ${t.bars_in_trade}봉`;
+
+            document.getElementById('dshPnl').textContent = formatCurrency(t.unrealized_pnl);
+            document.getElementById('dshPnl').className = `stat-value ${t.unrealized_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+            document.getElementById('dshPnlSub').textContent = `R: ${t.r_multiple.toFixed(2)} | ${t.unrealized_pnl_pct.toFixed(2)}%`;
+
+            document.getElementById('dshRisk').textContent = formatCurrency(t.current_risk);
+            const budgetPct = t.risk_budget > 0 ? (t.current_risk / t.risk_budget * 100).toFixed(0) : '--';
+            document.getElementById('dshRiskSub').textContent = `예산 사용: ${budgetPct}%`;
+
+            // 활성 거래 상세
+            document.getElementById('dshNoTrade').style.display = 'none';
+            document.getElementById('dshTradeInfo').style.display = 'block';
+            document.getElementById('dshTradeDir').textContent = dir;
+            document.getElementById('dshTradeDir').className = `badge ${t.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
+            document.getElementById('dshEntry').textContent = `${t.avg_entry.toFixed(2)}`;
+            document.getElementById('dshQty').textContent = t.total_qty;
+            document.getElementById('dshBars').textContent = t.bars_in_trade;
+            document.getElementById('dshInitStop').textContent = t.initial_stop.toFixed(2);
+            document.getElementById('dshTrailStop').textContent = t.trailing_stop > 0 ? t.trailing_stop.toFixed(2) : '--';
+            document.getElementById('dshActiveStop').textContent = t.active_stop.toFixed(2);
+            document.getElementById('dshBEStop').textContent = t.breakeven_stop > 0 ? t.breakeven_stop.toFixed(2) : '--';
+            document.getElementById('dshMFE').textContent = t.mfe.toFixed(2);
+            document.getElementById('dshMAE').textContent = t.mae.toFixed(2);
+            document.getElementById('dshArmed').innerHTML = t.trail_armed ?
+                `<span class="text-success">✓ ${t.trail_arm_reason}</span>` : '<span class="text-muted">아직</span>';
+            document.getElementById('dshBE').innerHTML = t.breakeven_active ?
+                '<span class="text-success">✓ 활성</span>' : '<span class="text-muted">비활성</span>';
+
+            // 체결 이력
+            if (t.fills && t.fills.length > 0) {
+                document.getElementById('dshScaleInSection').style.display = 'block';
+                const tbody = document.getElementById('dshFillsBody');
+                tbody.innerHTML = t.fills.map(f =>
+                    `<tr><td>${f.bar}</td><td><span class="badge ${f.type==='pyramid'?'bg-primary':f.type==='avg_down'?'bg-warning':'bg-info'}">${
+                        f.type==='entry'?'진입':f.type==='pyramid'?'피라미딩':'물타기'}</span></td>` +
+                    `<td>${f.price.toFixed(2)}</td><td>${f.qty}</td><td>${f.avg_after.toFixed(2)}</td></tr>`
+                ).join('');
+            } else {
+                document.getElementById('dshScaleInSection').style.display = 'none';
+            }
+
+            // 적응형 상태
+            document.getElementById('dshNoise').textContent = t.noise_score.toFixed(3);
+            document.getElementById('dshNoiseProg').style.width = `${t.noise_score * 100}%`;
+            document.getElementById('dshEff').textContent = t.trend_efficiency.toFixed(3);
+            document.getElementById('dshEffProg').style.width = `${t.trend_efficiency * 100}%`;
+            document.getElementById('dshRegime').textContent = t.atr_regime.toFixed(3);
+            document.getElementById('dshArmMult').textContent = `×${t.adaptive_arm_mult.toFixed(3)}`;
+            document.getElementById('dshBEMult').textContent = `×${t.adaptive_be_mult.toFixed(3)}`;
+            document.getElementById('dshTrailMult').textContent = `×${t.adaptive_trail_mult.toFixed(3)}`;
+
+            // 이벤트
+            if (t.events && t.events.length > 0) {
+                document.getElementById('dshEventCount').textContent = t.events.length;
+                const eventsHtml = t.events.slice(-20).reverse().map(e =>
+                    `<div class="event-item event-${e.type}">
+                        <span class="event-badge">${eventIcon(e.type)}</span>
+                        <span class="event-msg">${e.message}</span>
+                        <span class="event-time">#${e.bar}</span>
+                    </div>`
+                ).join('');
+                document.getElementById('dshEvents').innerHTML = eventsHtml;
+            }
+        } else {
+            document.getElementById('dshStatus').textContent = '대기';
+            document.getElementById('dshStatusIcon').innerHTML = '<i class="bi bi-pause-circle text-secondary"></i>';
+            document.getElementById('dshStatusSub').textContent = '거래 없음';
+            document.getElementById('dshPnl').textContent = '₩0';
+            document.getElementById('dshPnl').className = 'stat-value';
+            document.getElementById('dshPnlSub').textContent = '';
+            document.getElementById('dshRisk').textContent = '₩0';
+            document.getElementById('dshRiskSub').textContent = '';
+            document.getElementById('dshNoTrade').style.display = 'block';
+            document.getElementById('dshTradeInfo').style.display = 'none';
+        }
+
+        // ATR
+        document.getElementById('dshAtr').textContent = dash.current_atr > 0 ? dash.current_atr.toFixed(4) : '--';
+        document.getElementById('dshAtrSub').textContent = `봉 수: ${dash.bar_count}`;
+
+        // 통계
+        document.getElementById('dshTotal').textContent = dash.total_trades;
+        document.getElementById('dshWinRate').textContent = `${dash.win_rate}%`;
+        document.getElementById('dshWL').textContent = `${dash.wins} / ${dash.losses}`;
+        document.getElementById('dshTotalPnl').textContent = formatCurrency(dash.total_pnl);
+        document.getElementById('dshTotalPnl').className = `info-value ${dash.total_pnl >= 0 ? 'text-success' : 'text-danger'}`;
+        document.getElementById('dshAvgR').textContent = dash.avg_r.toFixed(2);
+        document.getElementById('dshPF').textContent = dash.profit_factor.toFixed(2);
+        document.getElementById('dshAvgWin').textContent = formatCurrency(dash.avg_win);
+        document.getElementById('dshAvgLoss').textContent = formatCurrency(dash.avg_loss);
+
+        // 차트
+        updateWinChart(dash.wins, dash.losses);
+        updatePnlChart(status.trade_history || []);
+
+        // 네비 업데이트
+        updateNav(dash);
+    } catch (err) {
+        console.error('Dashboard load error:', err);
+    }
+}
+
+function updateWinChart(wins, losses) {
+    const ctx = document.getElementById('dshWinChart');
+    if (winChart) winChart.destroy();
+    winChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['승', '패'],
+            datasets: [{
+                data: [wins || 0, losses || 0],
+                backgroundColor: ['#198754', '#dc3545'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { color: '#adb5bd', font: { size: 11 } } }
+            },
+            cutout: '65%',
+        }
+    });
+}
+
+function updatePnlChart(history) {
+    const ctx = document.getElementById('dshPnlChart');
+    if (pnlChart) pnlChart.destroy();
+    if (!history || history.length === 0) {
+        pnlChart = new Chart(ctx, {
+            type: 'line', data: { labels: [], datasets: [] },
+            options: { responsive: true }
+        });
+        return;
+    }
+    let cumPnl = 0;
+    const labels = [];
+    const data = [];
+    history.forEach((t, i) => {
+        cumPnl += t.pnl || 0;
+        labels.push(`#${i + 1}`);
+        data.push(cumPnl);
+    });
+    pnlChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '누적 손익',
+                data: data,
+                borderColor: cumPnl >= 0 ? '#198754' : '#dc3545',
+                backgroundColor: cumPnl >= 0 ? 'rgba(25,135,84,0.1)' : 'rgba(220,53,69,0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
+            }
+        }
+    });
+}
+
+function updateNav(dash) {
+    const el = document.getElementById('navStatus');
+    if (dash.active_trade) {
+        el.textContent = dash.active_trade.direction === 'long' ? '롱 거래중' : '숏 거래중';
+        el.className = `badge ${dash.active_trade.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
+    } else {
+        el.textContent = '대기';
+        el.className = 'badge bg-secondary';
+    }
+    document.getElementById('navAtr').textContent = `ATR: ${dash.current_atr > 0 ? dash.current_atr.toFixed(4) : '--'}`;
+}
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+setInterval(loadDashboard, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}거래 내역 - 거래 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-clock-history me-2"></i>거래 내역</h4>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadHistory()">
+            <i class="bi bi-arrow-clockwise me-1"></i>새로고침
+        </button>
+    </div>
+
+    <!-- 통계 요약 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">총 거래</div>
+                    <div class="stat-value" id="hTotal">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">승률</div>
+                    <div class="stat-value" id="hWinRate">0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">총 손익</div>
+                    <div class="stat-value" id="hTotalPnl">₩0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">평균 R</div>
+                    <div class="stat-value" id="hAvgR">0.00</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">Profit Factor</div>
+                    <div class="stat-value" id="hPF">0.00</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card">
+                <div class="card-body py-2 text-center">
+                    <div class="stat-label">평균 보유 봉</div>
+                    <div class="stat-value" id="hAvgBars">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 거래 테이블 -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-dark table-hover mb-0">
+                    <thead class="table-header-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>방향</th>
+                            <th>진입가</th>
+                            <th>평균단가</th>
+                            <th>청산가</th>
+                            <th>수량</th>
+                            <th>손익</th>
+                            <th>손익%</th>
+                            <th>R(초기)</th>
+                            <th>R(최대)</th>
+                            <th>MFE</th>
+                            <th>MAE</th>
+                            <th>보유 봉</th>
+                            <th>추가진입</th>
+                            <th>사유</th>
+                            <th>진입시간</th>
+                            <th>청산시간</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr><td colspan="17" class="text-center text-muted py-4">거래 내역이 없습니다</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 상세 모달 -->
+    <div class="modal fade" id="tradeDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark">
+                <div class="modal-header">
+                    <h5 class="modal-title">거래 상세</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="tradeDetailBody"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let tradeData = [];
+
+async function loadHistory() {
+    try {
+        const res = await fetch('/api/history');
+        tradeData = await res.json();
+        renderHistory(tradeData);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function renderHistory(data) {
+    const tbody = document.getElementById('historyBody');
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="17" class="text-center text-muted py-4">거래 내역이 없습니다</td></tr>';
+        return;
+    }
+
+    // 통계 계산
+    const wins = data.filter(t => t.pnl > 0);
+    const losses = data.filter(t => t.pnl <= 0);
+    const totalPnl = data.reduce((s, t) => s + t.pnl, 0);
+    const avgR = data.reduce((s, t) => s + t.r_initial, 0) / data.length;
+    const winSum = wins.reduce((s, t) => s + t.pnl, 0);
+    const lossSum = losses.reduce((s, t) => s + t.pnl, 0);
+    const pf = lossSum !== 0 ? Math.abs(winSum / lossSum) : 0;
+    const avgBars = data.reduce((s, t) => s + t.bars_held, 0) / data.length;
+
+    document.getElementById('hTotal').textContent = data.length;
+    document.getElementById('hWinRate').textContent = `${(wins.length / data.length * 100).toFixed(1)}%`;
+    document.getElementById('hTotalPnl').textContent = formatCurrency(totalPnl);
+    document.getElementById('hTotalPnl').className = `stat-value ${totalPnl >= 0 ? 'text-success' : 'text-danger'}`;
+    document.getElementById('hAvgR').textContent = avgR.toFixed(2);
+    document.getElementById('hPF').textContent = pf.toFixed(2);
+    document.getElementById('hAvgBars').textContent = avgBars.toFixed(1);
+
+    tbody.innerHTML = data.map((t, i) => {
+        const dirClass = t.direction === 'long' ? 'text-success' : 'text-danger';
+        const dirText = t.direction === 'long' ? '롱' : '숏';
+        const pnlClass = t.pnl >= 0 ? 'text-success' : 'text-danger';
+        return `<tr class="cursor-pointer" onclick="showDetail(${i})">
+            <td>${i + 1}</td>
+            <td><span class="${dirClass}">${dirText}</span></td>
+            <td>${t.entry_price.toFixed(2)}</td>
+            <td>${t.avg_entry.toFixed(2)}</td>
+            <td>${t.exit_price.toFixed(2)}</td>
+            <td>${t.qty}</td>
+            <td class="${pnlClass}">${formatCurrency(t.pnl)}</td>
+            <td class="${pnlClass}">${t.pnl_pct.toFixed(2)}%</td>
+            <td>${t.r_initial.toFixed(2)}</td>
+            <td>${t.r_max.toFixed(2)}</td>
+            <td class="text-success">${t.mfe.toFixed(2)}</td>
+            <td class="text-danger">${t.mae.toFixed(2)}</td>
+            <td>${t.bars_held}</td>
+            <td>${t.scale_ins}</td>
+            <td>${t.exit_reason}</td>
+            <td class="small">${t.entry_time}</td>
+            <td class="small">${t.exit_time}</td>
+        </tr>`;
+    }).join('');
+}
+
+function showDetail(idx) {
+    const t = tradeData[idx];
+    if (!t) return;
+
+    const dir = t.direction === 'long' ? '롱' : '숏';
+    const body = document.getElementById('tradeDetailBody');
+    body.innerHTML = `
+        <div class="row g-3">
+            <div class="col-md-6">
+                <h6>기본 정보</h6>
+                <table class="table table-sm table-dark">
+                    <tr><td>방향</td><td class="${t.direction === 'long' ? 'text-success' : 'text-danger'} fw-bold">${dir}</td></tr>
+                    <tr><td>진입가</td><td>${t.entry_price.toFixed(2)}</td></tr>
+                    <tr><td>평균단가</td><td>${t.avg_entry.toFixed(2)}</td></tr>
+                    <tr><td>청산가</td><td>${t.exit_price.toFixed(2)}</td></tr>
+                    <tr><td>수량</td><td>${t.qty}</td></tr>
+                    <tr><td>청산 사유</td><td>${t.exit_reason}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>성과</h6>
+                <table class="table table-sm table-dark">
+                    <tr><td>손익</td><td class="${t.pnl >= 0 ? 'text-success' : 'text-danger'} fw-bold">${formatCurrency(t.pnl)} (${t.pnl_pct.toFixed(2)}%)</td></tr>
+                    <tr><td>R (초기 리스크 대비)</td><td>${t.r_initial.toFixed(2)}</td></tr>
+                    <tr><td>R (최대 리스크 대비)</td><td>${t.r_max.toFixed(2)}</td></tr>
+                    <tr><td>MFE (최대유리)</td><td class="text-success">${t.mfe.toFixed(2)} ATR</td></tr>
+                    <tr><td>MAE (최대불리)</td><td class="text-danger">${t.mae.toFixed(2)} ATR</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>리스크</h6>
+                <table class="table table-sm table-dark">
+                    <tr><td>초기 리스크</td><td>${formatCurrency(t.initial_risk)}</td></tr>
+                    <tr><td>최대 리스크</td><td>${formatCurrency(t.max_risk)}</td></tr>
+                    <tr><td>Entry ATR</td><td>${t.entry_atr.toFixed(4)}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>기타</h6>
+                <table class="table table-sm table-dark">
+                    <tr><td>보유 봉 수</td><td>${t.bars_held}</td></tr>
+                    <tr><td>추가진입 횟수</td><td>${t.scale_ins}</td></tr>
+                    <tr><td>진입 시간</td><td>${t.entry_time}</td></tr>
+                    <tr><td>청산 시간</td><td>${t.exit_time}</td></tr>
+                </table>
+            </div>
+        </div>
+    `;
+    new bootstrap.Modal(document.getElementById('tradeDetailModal')).show();
+}
+
+document.addEventListener('DOMContentLoaded', loadHistory);
+</script>
+{% endblock %}

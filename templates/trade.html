@@ -1,0 +1,672 @@
+{% extends "base.html" %}
+{% block title %}거래 관리 - 거래 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 종목 선택 바 -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">종목 검색</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="tickerSearch"
+                               placeholder="종목명 또는 코드 (예: 삼성전자, AAPL, 005930.KS)"
+                               autocomplete="off">
+                        <button class="btn btn-primary" onclick="searchTicker()" id="btnSearch">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                    <div id="searchResults" class="position-relative">
+                        <div id="searchDropdown" class="dropdown-menu w-100" style="display:none; max-height:300px; overflow-y:auto;"></div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">인터벌</label>
+                    <select class="form-select form-select-sm" id="intervalSelect">
+                        <option value="1m">1분</option>
+                        <option value="5m">5분</option>
+                        <option value="15m">15분</option>
+                        <option value="30m">30분</option>
+                        <option value="1h">1시간</option>
+                        <option value="1d" selected>일봉</option>
+                        <option value="1wk">주봉</option>
+                        <option value="1mo">월봉</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-0">봉 수</label>
+                    <input type="number" class="form-control form-control-sm" id="barCountInput" value="200" min="20" max="1000">
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div id="tickerInfo" class="flex-grow-1 small text-muted">종목을 검색하세요</div>
+                    </div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-info" onclick="refreshData()" title="데이터 갱신">
+                            <i class="bi bi-arrow-clockwise me-1"></i>갱신
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="resetTrade()" title="거래 리셋">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="fullReset()" title="전체 리셋">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- 왼쪽: 차트 -->
+        <div class="col-lg-8">
+            <!-- 현재 종목 정보 -->
+            <div class="d-flex justify-content-between align-items-center mb-2" id="tickerBar" style="display:none!important;">
+                <div>
+                    <span class="fw-bold fs-5" id="tickerSymbolDisplay">--</span>
+                    <span class="text-muted ms-2" id="tickerNameDisplay"></span>
+                </div>
+                <div>
+                    <span class="fs-5 fw-bold" id="currentPriceDisplay">--</span>
+                    <span class="badge bg-primary ms-1" id="chartBarCount">0봉</span>
+                    <span class="badge bg-secondary ms-1" id="chartAtr">ATR: --</span>
+                </div>
+            </div>
+
+            <!-- 차트 영역 -->
+            <div class="card mb-3">
+                <div class="card-body p-2">
+                    <canvas id="priceChart" height="350"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽: 포지션 관리 & 상태 -->
+        <div class="col-lg-4">
+            <!-- 수동 진입 / 청산 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-door-open me-2"></i>포지션 관리
+                </div>
+                <div class="card-body">
+                    <div id="entrySection">
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <label class="form-label small">방향</label>
+                                <select class="form-select form-select-sm" id="entryDirection">
+                                    <option value="long">롱 (매수)</option>
+                                    <option value="short">숏 (매도)</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">진입가</label>
+                                <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="현재가">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">수량 (0=자동)</label>
+                                <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0">
+                            </div>
+                        </div>
+                        <button class="btn btn-success btn-sm w-100 mb-2" onclick="manualEntry()">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>진입 실행
+                        </button>
+                    </div>
+                    <hr class="my-2">
+                    <div id="closeSection">
+                        <div class="mb-2">
+                            <label class="form-label small">청산 가격 (0=최근 종가)</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="closePrice" value="0">
+                        </div>
+                        <button class="btn btn-danger btn-sm w-100" onclick="manualClose()">
+                            <i class="bi bi-box-arrow-right me-1"></i>수동 청산
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 수동 추가진입 -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-plus-circle me-2"></i>추가진입
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label class="form-label small">가격</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">수량</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="addQty">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small">유형</label>
+                            <select class="form-select form-select-sm" id="addType">
+                                <option value="pyramid">피라미딩</option>
+                                <option value="avg_down">물타기</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-info btn-sm w-100" onclick="manualAdd()">
+                        <i class="bi bi-plus me-1"></i>추가진입
+                    </button>
+                </div>
+            </div>
+
+            <!-- 거래 상태 패널 -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between">
+                    <span><i class="bi bi-info-circle me-2"></i>거래 상태</span>
+                    <span class="badge" id="tradeStatusBadge">대기</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="trade-status-panel" id="tradeStatusPanel">
+                        <table class="table table-sm table-dark mb-0">
+                            <tbody id="statusTableBody">
+                                <tr><td class="text-muted" colspan="2">거래 없음</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 이벤트 로그 -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                    <span><i class="bi bi-journal-text me-2"></i>이벤트 로그</span>
+                    <span class="badge bg-secondary" id="eventLogCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="event-list" id="eventLog" style="max-height: 250px;">
+                        <div class="text-center text-muted py-3">이벤트 없음</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let priceChart = null;
+let currentSymbol = '';
+let searchTimeout = null;
+
+// ── 종목 검색 ───────────────────────────────────────────
+
+document.getElementById('tickerSearch').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (q.length < 1) {
+        document.getElementById('searchDropdown').style.display = 'none';
+        return;
+    }
+    searchTimeout = setTimeout(() => searchTicker(), 300);
+});
+
+document.getElementById('tickerSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchTicker();
+    }
+});
+
+// 클릭 시 드롭다운 닫기
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#searchResults') && !e.target.closest('#tickerSearch')) {
+        document.getElementById('searchDropdown').style.display = 'none';
+    }
+});
+
+async function searchTicker() {
+    const q = document.getElementById('tickerSearch').value.trim();
+    if (!q) return;
+
+    document.getElementById('btnSearch').innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const res = await fetch(`/api/ticker/search?q=${encodeURIComponent(q)}`);
+        const results = await res.json();
+        const dropdown = document.getElementById('searchDropdown');
+
+        if (!results.length || results[0]?.error) {
+            dropdown.innerHTML = '<div class="dropdown-item text-muted">검색 결과 없음</div>';
+            dropdown.style.display = 'block';
+            return;
+        }
+
+        dropdown.innerHTML = results.map(r => `
+            <a class="dropdown-item d-flex justify-content-between" href="#"
+               onclick="selectTicker('${r.symbol}', '${(r.name || '').replace(/'/g, "\\'")}'); return false;">
+                <div>
+                    <strong>${r.symbol}</strong>
+                    <span class="text-muted ms-2">${r.name || ''}</span>
+                </div>
+                <small class="text-muted">${r.exchange || ''} ${r.type || ''}</small>
+            </a>
+        `).join('');
+        dropdown.style.display = 'block';
+    } catch (err) {
+        console.error(err);
+    } finally {
+        document.getElementById('btnSearch').innerHTML = '<i class="bi bi-search"></i>';
+    }
+}
+
+async function selectTicker(symbol, name) {
+    document.getElementById('searchDropdown').style.display = 'none';
+    document.getElementById('tickerSearch').value = symbol;
+    document.getElementById('tickerInfo').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>데이터 로딩 중...';
+
+    const interval = document.getElementById('intervalSelect').value;
+    const count = parseInt(document.getElementById('barCountInput').value) || 200;
+
+    try {
+        const res = await fetchJson('/api/ticker/set', { symbol, interval, count });
+        if (res.error) {
+            showToast('오류', res.error, 'danger');
+            document.getElementById('tickerInfo').textContent = res.error;
+            return;
+        }
+
+        currentSymbol = symbol;
+
+        // UI 업데이트
+        document.getElementById('tickerBar').style.display = 'flex';
+        document.getElementById('tickerBar').classList.add('d-flex');
+        document.getElementById('tickerSymbolDisplay').textContent = symbol;
+        document.getElementById('tickerNameDisplay').textContent = res.name || '';
+        document.getElementById('currentPriceDisplay').textContent = res.last_price?.toLocaleString() || '--';
+        document.getElementById('tickerInfo').innerHTML =
+            `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${res.name} | ${res.bars_loaded}봉 로드 | ATR: ${res.atr?.toFixed(2)}</span>`;
+
+        showToast('종목 로드', `${symbol} ${res.bars_loaded}봉 로드 완료`, 'success');
+        loadTradeStatus();
+    } catch (err) {
+        showToast('오류', '데이터 로드 실패', 'danger');
+        document.getElementById('tickerInfo').textContent = '로드 실패';
+    }
+}
+
+async function refreshData() {
+    if (!currentSymbol && !document.getElementById('tickerSymbolDisplay').textContent.includes('--')) {
+        // 이미 설정된 종목이 있으면 그걸로 갱신
+    }
+
+    document.getElementById('tickerInfo').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>갱신 중...';
+
+    try {
+        const res = await fetchJson('/api/ticker/refresh', {});
+        if (res.error) {
+            // 종목이 없으면 tickerSearch 값으로 재시도
+            const sym = document.getElementById('tickerSearch').value.trim();
+            if (sym) {
+                const interval = document.getElementById('intervalSelect').value;
+                const count = parseInt(document.getElementById('barCountInput').value) || 200;
+                await selectTicker(sym, '');
+                return;
+            }
+            showToast('오류', res.error, 'warning');
+            document.getElementById('tickerInfo').textContent = res.error;
+            return;
+        }
+
+        document.getElementById('currentPriceDisplay').textContent = res.last_price?.toLocaleString() || '--';
+        document.getElementById('tickerInfo').innerHTML =
+            `<span class="text-success"><i class="bi bi-check-circle me-1"></i>갱신 완료 | ${res.bars_loaded}봉 | ATR: ${res.atr?.toFixed(2)}</span>`;
+
+        showToast('갱신', `${res.bars_loaded}봉 갱신 완료`, 'info');
+        loadTradeStatus();
+    } catch (err) {
+        document.getElementById('tickerInfo').textContent = '갱신 실패';
+    }
+}
+
+// ── 거래 상태 로드 ───────────────────────────────────────
+
+async function loadTradeStatus() {
+    try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        updateTradePanel(data);
+        updatePriceChart(data);
+
+        // 종목 정보 복원
+        if (data.config?.ticker_symbol && !currentSymbol) {
+            currentSymbol = data.config.ticker_symbol;
+            document.getElementById('tickerSearch').value = currentSymbol;
+            document.getElementById('tickerSymbolDisplay').textContent = currentSymbol;
+            document.getElementById('tickerNameDisplay').textContent = data.config.ticker_name || '';
+            document.getElementById('intervalSelect').value = data.config.data_interval || '1d';
+            document.getElementById('barCountInput').value = data.config.data_count || 200;
+            if (data.bar_count > 0) {
+                document.getElementById('tickerBar').style.display = 'flex';
+                document.getElementById('tickerBar').classList.add('d-flex');
+                document.getElementById('tickerInfo').innerHTML =
+                    `<span class="text-success">${data.config.ticker_name} | ${data.bar_count}봉 | ATR: ${data.atr > 0 ? data.atr.toFixed(2) : '--'}</span>`;
+            }
+        }
+
+        // 방향 셀렉트 동기화
+        if (data.config?.position_direction) {
+            document.getElementById('entryDirection').value = data.config.position_direction;
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function updateTradePanel(data) {
+    const trade = data.trade;
+    const badge = document.getElementById('tradeStatusBadge');
+    const tbody = document.getElementById('statusTableBody');
+
+    if (trade.active) {
+        const dir = trade.direction === 'long' ? '롱' : '숏';
+        badge.textContent = `${dir} 거래중`;
+        badge.className = `badge ${trade.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
+
+        tbody.innerHTML = `
+            <tr><td>방향</td><td class="fw-bold">${dir}</td></tr>
+            <tr><td>진입가</td><td>${trade.entry_price.toFixed(2)}</td></tr>
+            <tr><td>평균단가</td><td>${trade.avg_entry.toFixed(2)}</td></tr>
+            <tr><td>수량</td><td>${trade.total_qty}</td></tr>
+            <tr><td>보유 봉수</td><td>${trade.bars_in_trade}</td></tr>
+            <tr><td>초기 손절</td><td class="text-danger">${trade.initial_stop.toFixed(2)}</td></tr>
+            <tr><td>추적 손절</td><td class="text-warning">${trade.trailing_stop > 0 ? trade.trailing_stop.toFixed(2) : '--'}</td></tr>
+            <tr><td>본전 손절</td><td class="text-info">${trade.breakeven_stop > 0 ? trade.breakeven_stop.toFixed(2) : '--'}</td></tr>
+            <tr><td class="fw-bold">활성 손절</td><td class="fw-bold">${trade.active_stop.toFixed(2)}</td></tr>
+            <tr><td>MFE / MAE</td><td><span class="text-success">${trade.mfe.toFixed(2)}</span> / <span class="text-danger">${trade.mae.toFixed(2)}</span> ATR</td></tr>
+            <tr><td>Trail Armed</td><td>${trade.trail_armed ? '<span class="text-success">✓</span>' : '<span class="text-muted">--</span>'}</td></tr>
+            <tr><td>Break-even</td><td>${trade.breakeven_active ? '<span class="text-success">✓</span>' : '<span class="text-muted">--</span>'}</td></tr>
+            <tr><td>미실현 손익</td><td class="${trade.unrealized_pnl >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(trade.unrealized_pnl)} (${trade.unrealized_pnl_pct.toFixed(2)}%)</td></tr>
+            <tr><td>R 배수</td><td>${trade.r_multiple.toFixed(2)}</td></tr>
+            <tr><td>현재 리스크</td><td>${formatCurrency(trade.current_risk)}</td></tr>
+            <tr><td>피라미딩</td><td>${trade.pyramid_count}회</td></tr>
+            <tr><td>물타기</td><td>${trade.avg_down_count}회</td></tr>
+            <tr><td>Entry ATR</td><td>${trade.entry_atr.toFixed(4)}</td></tr>
+        `;
+
+        // 이벤트 로그
+        if (trade.events && trade.events.length > 0) {
+            document.getElementById('eventLogCount').textContent = trade.events.length;
+            document.getElementById('eventLog').innerHTML = trade.events.slice(-30).reverse().map(e =>
+                `<div class="event-item event-${e.type}">
+                    <span class="event-badge">${eventIcon(e.type)}</span>
+                    <span class="event-msg">${e.message}</span>
+                    <span class="event-time">#${e.bar}</span>
+                </div>`
+            ).join('');
+        }
+    } else {
+        badge.textContent = '대기';
+        badge.className = 'badge bg-secondary';
+        tbody.innerHTML = '<tr><td class="text-muted" colspan="2">거래 없음</td></tr>';
+    }
+
+    // 차트 정보
+    document.getElementById('chartBarCount').textContent = `${data.bar_count}봉`;
+    document.getElementById('chartAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
+
+    // 네비 업데이트
+    const navEl = document.getElementById('navStatus');
+    if (trade.active) {
+        navEl.textContent = trade.direction === 'long' ? '롱 거래중' : '숏 거래중';
+        navEl.className = `badge ${trade.direction === 'long' ? 'bg-success' : 'bg-danger'}`;
+    } else {
+        navEl.textContent = '대기';
+        navEl.className = 'badge bg-secondary';
+    }
+    document.getElementById('navAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
+}
+
+let lastChartJson = '';
+
+function updatePriceChart(data) {
+    fetch('/api/chart').then(r => r.json()).then(chart => {
+        const newJson = JSON.stringify({bc: chart.bars?.length, active: chart.active, sh: chart.stop_history?.length});
+        if (newJson !== lastChartJson) {
+            drawPriceChart(chart);
+            lastChartJson = newJson;
+        }
+    });
+}
+
+function drawPriceChart(chartData) {
+    const ctx = document.getElementById('priceChart');
+    if (priceChart) priceChart.destroy();
+
+    const bars = chartData.bars || [];
+    if (bars.length === 0) {
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+        return;
+    }
+
+    const labels = bars.map((b, i) => b.timestamp || `#${i}`);
+    const closes = bars.map(b => b.close);
+    const highs = bars.map(b => b.high);
+    const lows = bars.map(b => b.low);
+
+    const datasets = [
+        {
+            label: '종가',
+            data: closes,
+            borderColor: '#6ea8fe',
+            backgroundColor: 'rgba(110,168,254,0.1)',
+            fill: false,
+            tension: 0.1,
+            pointRadius: 1,
+            borderWidth: 2,
+        },
+        {
+            label: '고가',
+            data: highs,
+            borderColor: 'rgba(25,135,84,0.3)',
+            fill: false,
+            pointRadius: 0,
+            borderWidth: 1,
+            borderDash: [2, 2],
+        },
+        {
+            label: '저가',
+            data: lows,
+            borderColor: 'rgba(220,53,69,0.3)',
+            fill: false,
+            pointRadius: 0,
+            borderWidth: 1,
+            borderDash: [2, 2],
+        },
+    ];
+
+    // 손절선 오버레이
+    const stops = chartData.stop_history || [];
+    if (stops.length > 0 && chartData.active) {
+        const activeStops = new Array(bars.length).fill(null);
+        const initStops = new Array(bars.length).fill(null);
+        const trailStops = new Array(bars.length).fill(null);
+
+        stops.forEach(s => {
+            if (s.bar < bars.length) {
+                activeStops[s.bar] = s.active || null;
+                initStops[s.bar] = s.initial || null;
+                if (s.trailing > 0) trailStops[s.bar] = s.trailing;
+            }
+        });
+
+        for (let i = 1; i < bars.length; i++) {
+            if (activeStops[i] === null && activeStops[i-1] !== null) activeStops[i] = activeStops[i-1];
+            if (initStops[i] === null && initStops[i-1] !== null) initStops[i] = initStops[i-1];
+            if (trailStops[i] === null && trailStops[i-1] !== null) trailStops[i] = trailStops[i-1];
+        }
+
+        datasets.push({
+            label: '활성 손절',
+            data: activeStops,
+            borderColor: '#ff6b6b',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+        });
+        datasets.push({
+            label: '초기 손절',
+            data: initStops,
+            borderColor: 'rgba(220,53,69,0.4)',
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+        });
+        datasets.push({
+            label: '추적 손절',
+            data: trailStops,
+            borderColor: 'rgba(255,193,7,0.6)',
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: true,
+        });
+
+        if (chartData.entry_price > 0) {
+            datasets.push({
+                label: '진입가',
+                data: new Array(bars.length).fill(chartData.entry_price),
+                borderColor: 'rgba(13,202,240,0.5)',
+                borderWidth: 1,
+                borderDash: [8, 4],
+                pointRadius: 0,
+                fill: false,
+            });
+        }
+    }
+
+    // 체결 마커
+    const fills = chartData.fills || [];
+    if (fills.length > 0) {
+        const fillData = new Array(bars.length).fill(null);
+        fills.forEach(f => {
+            if (f.bar < bars.length) fillData[f.bar] = f.price;
+        });
+        datasets.push({
+            label: '체결',
+            data: fillData,
+            borderColor: '#ffc107',
+            backgroundColor: '#ffc107',
+            pointRadius: 6,
+            pointStyle: 'triangle',
+            showLine: false,
+        });
+    }
+
+    priceChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#adb5bd', font: { size: 10 }, boxWidth: 12 }
+                },
+                tooltip: { mode: 'index' },
+            },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#6c757d', maxTicksLimit: 20, font: { size: 9 } } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
+            },
+        }
+    });
+}
+
+// ── 포지션 관리 ──────────────────────────────────────────
+
+async function manualEntry() {
+    const price = parseFloat(document.getElementById('entryPrice').value);
+    const qty = parseFloat(document.getElementById('entryQty').value) || 0;
+    const direction = document.getElementById('entryDirection').value;
+
+    if (!price || price <= 0) {
+        showToast('오류', '진입 가격을 입력하세요', 'warning');
+        return;
+    }
+
+    // 방향 설정 반영
+    await fetchJson('/api/config', { position_direction: direction, entry_source: 'manual' });
+
+    const res = await fetchJson('/api/entry', { price, qty });
+    if (res.error) {
+        showToast('오류', res.error, 'danger');
+    } else {
+        showToast('진입', `${price.toLocaleString()} 에 ${direction === 'long' ? '롱' : '숏'} 진입 완료`, 'success');
+        loadTradeStatus();
+    }
+}
+
+async function manualClose() {
+    const price = parseFloat(document.getElementById('closePrice').value) || 0;
+    if (!confirm('정말 청산하시겠습니까?')) return;
+    const res = await fetchJson('/api/close', { price });
+    if (res.error) {
+        showToast('오류', res.error, 'danger');
+    } else {
+        const s = res.summary;
+        showToast('청산 완료',
+            `손익: ${formatCurrency(s.pnl)} (${s.pnl_pct.toFixed(2)}%) | R: ${s.r_initial.toFixed(2)}`,
+            s.pnl >= 0 ? 'success' : 'danger');
+        loadTradeStatus();
+    }
+}
+
+async function manualAdd() {
+    const price = parseFloat(document.getElementById('addPrice').value);
+    const qty = parseFloat(document.getElementById('addQty').value);
+    const type = document.getElementById('addType').value;
+    if (!price || !qty || price <= 0 || qty <= 0) {
+        showToast('오류', '가격과 수량을 입력하세요', 'warning');
+        return;
+    }
+    const res = await fetchJson('/api/add', { price, qty, type });
+    if (res.error) {
+        showToast('차단', res.error, 'warning');
+    } else {
+        showToast('추가진입', `${type === 'pyramid' ? '피라미딩' : '물타기'} 완료`, 'success');
+        loadTradeStatus();
+    }
+}
+
+async function resetTrade() {
+    if (!confirm('현재 거래를 리셋합니다. 가격 데이터는 유지됩니다.')) return;
+    await fetchJson('/api/reset', {});
+    showToast('리셋', '거래가 리셋되었습니다', 'info');
+    loadTradeStatus();
+}
+
+async function fullReset() {
+    if (!confirm('모든 데이터를 초기화합니다. 가격 데이터와 거래 내역이 모두 삭제됩니다.')) return;
+    await fetchJson('/api/full-reset', {});
+    currentSymbol = '';
+    document.getElementById('tickerBar').style.display = 'none';
+    document.getElementById('tickerInfo').textContent = '종목을 검색하세요';
+    document.getElementById('tickerSearch').value = '';
+    lastChartJson = '';
+    showToast('초기화', '모든 데이터가 초기화되었습니다', 'info');
+    loadTradeStatus();
+}
+
+// ── 초기화 ────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', loadTradeStatus);
+setInterval(loadTradeStatus, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+{% block title %}설정 - 거래 관리 시스템{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-gear me-2"></i>설정</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary" onclick="saveSettings()">
+                <i class="bi bi-check-lg me-1"></i>저장
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadSettings()">
+                <i class="bi bi-arrow-clockwise me-1"></i>불러오기
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="resetSettings()">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>기본값 복원
+            </button>
+        </div>
+    </div>
+
+    <!-- 경고 메시지 -->
+    <div id="settingsWarnings" class="mb-3" style="display:none;"></div>
+
+    <div class="accordion" id="settingsAccordion">
+
+        <!-- 1. Entry -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#secEntry">
+                    <i class="bi bi-door-open me-2"></i>진입 (Entry)
+                </button>
+            </h2>
+            <div id="secEntry" class="accordion-collapse collapse show" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">포지션 방향</label>
+                            <select class="form-select form-select-sm" id="cfg_position_direction">
+                                <option value="long">롱 (Long)</option>
+                                <option value="short">숏 (Short)</option>
+                            </select>
+                            <div class="form-text">롱과 숏은 손절 계산 방향이 반대</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">진입 소스</label>
+                            <select class="form-select form-select-sm" id="cfg_entry_source">
+                                <option value="bar_close">봉 종가 (Bar Close)</option>
+                                <option value="manual">수동 가격 (Manual)</option>
+                            </select>
+                            <div class="form-text">특정 봉 종가 진입 또는 직접 가격 지정</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">거래 시작 봉 인덱스</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_trade_start_bar" min="0">
+                            <div class="form-text">이 봉부터 거래를 관리 시작</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수동 진입 가격</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_manual_entry_price">
+                            <div class="form-text">수동 모드에서 사용할 진입 가격</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수동 활성화 방식</label>
+                            <select class="form-select form-select-sm" id="cfg_manual_activation">
+                                <option value="immediate">즉시 (Immediate)</option>
+                                <option value="first_touch">첫 터치 (First Touch)</option>
+                            </select>
+                            <div class="form-text">즉시 진입 또는 가격 터치 시 진입</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="cfg_manual_uses_start_time">
+                                <label class="form-check-label">수동 진입도 시작 시간 제한 적용</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Position Sizing -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secSizing">
+                    <i class="bi bi-calculator me-2"></i>포지션 사이징 (Position Sizing)
+                </button>
+            </h2>
+            <div id="secSizing" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">사이징 모드</label>
+                            <select class="form-select form-select-sm" id="cfg_sizing_mode">
+                                <option value="manual">수동 수량 (Manual Qty)</option>
+                                <option value="risk_based">리스크 기반 (Risk-Based)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">초기 수량</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_initial_qty" min="0">
+                            <div class="form-text">수동 모드에서 사용할 기본 수량</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">총 자본금</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_total_capital" min="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">거래당 리스크 (%)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_risk_per_trade_pct" min="0" max="100">
+                            <div class="form-text">자본의 몇 %까지 손실 허용</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수량 프리셋</label>
+                            <select class="form-select form-select-sm" id="cfg_qty_preset">
+                                <option value="stocks">주식 (정수)</option>
+                                <option value="futures">선물 (정수 계약)</option>
+                                <option value="crypto">크립토 (0.001)</option>
+                                <option value="custom">사용자 정의</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">반올림 모드</label>
+                            <select class="form-select form-select-sm" id="cfg_custom_rounding">
+                                <option value="none">없음</option>
+                                <option value="floor">내림 (Floor)</option>
+                                <option value="round">반올림 (Round)</option>
+                                <option value="ceil">올림 (Ceil)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">수량 단위</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_custom_qty_step" min="0">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-3">
+                                <input type="checkbox" class="form-check-input" id="cfg_show_warnings">
+                                <label class="form-check-label">설정 경고 표시</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Manual Scale-In -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secScaleIn">
+                    <i class="bi bi-plus-circle me-2"></i>수동 추가진입 (Manual Scale-In)
+                </button>
+            </h2>
+            <div id="secScaleIn" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_enable_manual_scale_ins">
+                                <label class="form-check-label">수동 추가진입 활성화</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">기본 손절 처리</label>
+                            <select class="form-select form-select-sm" id="cfg_scale_in_stop_handling">
+                                <option value="keep">현재 유지 (Keep)</option>
+                                <option value="rebase">평균단가 리베이스 (Rebase)</option>
+                                <option value="rebase_no_wider">리베이스 (넓힘 금지)</option>
+                                <option value="soft_rebase">소프트 리베이스</option>
+                                <option value="block">차단 (Block)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">피라미딩 손절 처리</label>
+                            <select class="form-select form-select-sm" id="cfg_pyramid_stop_handling">
+                                <option value="keep">현재 유지</option>
+                                <option value="rebase">리베이스</option>
+                                <option value="rebase_no_wider">리베이스 (넓힘 금지)</option>
+                                <option value="soft_rebase">소프트 리베이스</option>
+                                <option value="block">차단</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">물타기 손절 처리</label>
+                            <select class="form-select form-select-sm" id="cfg_avg_down_stop_handling">
+                                <option value="keep">현재 유지</option>
+                                <option value="rebase">리베이스</option>
+                                <option value="rebase_no_wider">리베이스 (넓힘 금지)</option>
+                                <option value="soft_rebase">소프트 리베이스</option>
+                                <option value="block">차단</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">소프트 리베이스 가중치</label>
+                            <input type="number" step="0.05" class="form-control form-control-sm" id="cfg_soft_rebase_weight" min="0" max="1">
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="cfg_cap_to_risk_budget">
+                                <label class="form-check-label">리스크 예산 제한</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">최소 간격 (ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_min_add_spacing_atr" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">피라미딩 최대 횟수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_max_pyramid_adds" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">물타기 최대 횟수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_max_avg_down_adds" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">물타기 허용 시점</label>
+                            <select class="form-select form-select-sm" id="cfg_avg_down_allowed_until">
+                                <option value="always">항상</option>
+                                <option value="before_trail_armed">Trail Armed 이전</option>
+                                <option value="before_breakeven">Break-even 이전</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수동 추가 체결 방식</label>
+                            <select class="form-select form-select-sm" id="cfg_manual_add_fill_mode">
+                                <option value="first_touch">첫 터치 체결</option>
+                                <option value="scheduled_close">예정 봉 종가 체결</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Conditional Pyramid -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secPyramid">
+                    <i class="bi bi-layers me-2"></i>조건부 피라미딩 (Conditional Pyramid)
+                </button>
+            </h2>
+            <div id="secPyramid" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_enable_conditional_pyramid">
+                                <label class="form-check-label">조건부 피라미딩 활성화</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">트리거 조건</label>
+                            <select class="form-select form-select-sm" id="cfg_auto_add_trigger">
+                                <option value="trail_armed">Trail Armed</option>
+                                <option value="breakeven_active">Break-even 활성화</option>
+                                <option value="new_extreme">Trail Armed 후 새 극값</option>
+                                <option value="mfe_step">MFE ATR 단계</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수량 모드</label>
+                            <select class="form-select form-select-sm" id="cfg_auto_add_qty_mode">
+                                <option value="fixed">고정 수량</option>
+                                <option value="pct_initial">초기 수량 %</option>
+                                <option value="risk_remaining">남은 리스크</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">고정 수량</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="cfg_auto_add_fixed_qty" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">초기 수량 %</label>
+                            <input type="number" step="1" class="form-control form-control-sm" id="cfg_auto_add_qty_pct" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">최대 자동 추가 횟수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_max_auto_adds" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">쿨다운 (봉)</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_auto_add_cooldown_bars" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">기본 MFE ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_auto_add_base_mfe_atr" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">단계 MFE ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_auto_add_step_mfe_atr" min="0">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. ATR -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secAtr">
+                    <i class="bi bi-bar-chart-line me-2"></i>ATR
+                </button>
+            </h2>
+            <div id="secAtr" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">ATR 기간 (Length)</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_atr_length" min="1">
+                            <div class="form-text">흔들림 평균을 얼마나 길게 볼지</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. Profile A Stop -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secStop">
+                    <i class="bi bi-shield me-2"></i>손절 프로필 (Profile A Stop)
+                </button>
+            </h2>
+            <div id="secStop" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">초기 손절 ATR 배수</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_initial_stop_atr_mult" min="0">
+                            <div class="form-text">진입가에서 ATR × 이 값만큼 손절</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Trail Arm 트리거 (ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_trail_arm_trigger_atr" min="0">
+                            <div class="form-text">이만큼 유리해야 trailing 시작</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Trail Arm 봉 수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_trail_arm_after_bars" min="0">
+                            <div class="form-text">시간 기반 arm 최소 봉 수</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">시간 Arm 최소 진전 (ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_time_arm_min_progress_atr" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="cfg_trail_arm_on_new_extreme">
+                                <label class="form-check-label">새 극값에서 Arm 허용</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Trailing ATR 배수</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_trailing_atr_mult" min="0">
+                            <div class="form-text">추적 손절 폭</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-2">
+                                <input type="checkbox" class="form-check-input" id="cfg_use_breakeven_ratchet">
+                                <label class="form-check-label">본전 보호 (Break-even Ratchet)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Break-even 트리거 (ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_breakeven_trigger_atr" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Break-even 오프셋 (ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_breakeven_offset_atr">
+                            <div class="form-text">본전보다 약간 위에서 보호</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">손절 판정 모드</label>
+                            <select class="form-select form-select-sm" id="cfg_stop_hit_mode">
+                                <option value="wick">꼬리 (Wick)</option>
+                                <option value="close">종가 확인 (Close)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="cfg_update_on_bar_close">
+                                <label class="form-check-label">봉 마감에만 업데이트</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">인트라바 충돌 처리</label>
+                            <select class="form-select form-select-sm" id="cfg_intrabar_conflict">
+                                <option value="conservative">보수적 (Conservative)</option>
+                                <option value="legacy">레거시 (Legacy)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. Basis -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secBasis">
+                    <i class="bi bi-crosshair me-2"></i>기준점 (Basis)
+                </button>
+            </h2>
+            <div id="secBasis" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">추세 기준 리셋</label>
+                            <select class="form-select form-select-sm" id="cfg_trend_basis_reset">
+                                <option value="initial_entry">최초 진입만</option>
+                                <option value="reset_on_rebase">리베이스 시 리셋</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Break-even 기준</label>
+                            <select class="form-select form-select-sm" id="cfg_breakeven_basis">
+                                <option value="risk_basis">리스크 기준 (평균단가)</option>
+                                <option value="trend_basis">추세 기준</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">피라미딩 유리 기준</label>
+                            <select class="form-select form-select-sm" id="cfg_pyramid_favorable_basis">
+                                <option value="risk_basis">리스크 기준 (평균단가)</option>
+                                <option value="trend_basis">추세 기준</option>
+                                <option value="pyramid_basis">피라미딩 기준 (최근 체결가)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. Adaptive Management -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secAdaptive">
+                    <i class="bi bi-cpu me-2"></i>적응형 관리 (Adaptive Management)
+                </button>
+            </h2>
+            <div id="secAdaptive" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <h6 class="text-info mb-3">기본 설정</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_enable_adaptive_arm_be">
+                                <label class="form-check-label">Adaptive Arm/BE 활성화</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_enable_adaptive_trailing">
+                                <label class="form-check-label">Adaptive Trailing 활성화</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_use_hybrid_trailing_atr">
+                                <label class="form-check-label">Hybrid Trailing ATR</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Adaptive 룩백 (봉)</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_adaptive_lookback" min="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">ATR 레짐 룩백</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_atr_regime_lookback" min="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">초기 MFE/MAE 윈도우</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_early_mfe_mae_window" min="1">
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="cfg_use_trade_memory">
+                                <label class="form-check-label">거래 기억 사용</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">기억 거래 수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_adaptive_history_trades" min="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">기억 가중치</label>
+                            <input type="number" step="0.05" class="form-control form-control-sm" id="cfg_adaptive_history_weight" min="0" max="1">
+                        </div>
+                    </div>
+
+                    <h6 class="text-info mb-3 mt-4">Trailing ATR 설정</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Trailing ATR EMA 길이</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_trailing_atr_ema_length" min="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">상위TF ATR 가중치</label>
+                            <input type="number" step="0.05" class="form-control form-control-sm" id="cfg_trailing_atr_higher_tf_weight" min="0" max="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">초기 봉 수</label>
+                            <input type="number" class="form-control form-control-sm" id="cfg_trailing_atr_early_bars" min="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">확장 상한 (× Entry ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_trailing_atr_expansion_cap" min="1">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">수축 하한 (× Entry ATR)</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_trailing_atr_contraction_floor" min="0">
+                        </div>
+                    </div>
+
+                    <h6 class="text-info mb-3 mt-4">적응형 강도 및 범위</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Arm/BE 강도</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_arm_be_strength" min="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Trailing 강도</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_trailing_strength" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Arm 최소 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_arm_min_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Arm 최대 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_arm_max_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">BE 최소 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_be_min_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">BE 최대 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_be_max_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Trail 최소 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_trailing_min_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Trail 최대 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_adaptive_trailing_max_atr" min="0">
+                        </div>
+                    </div>
+
+                    <h6 class="text-info mb-3 mt-4">품질 게이트 (Quality Gate)</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="cfg_enable_quality_gate">
+                                <label class="form-check-label">품질 게이트 활성화</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6"></div>
+                        <div class="col-md-3">
+                            <label class="form-label">최소 추세 MFE ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_quality_min_trend_mfe_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">최소 손절 개선 ATR</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm" id="cfg_quality_min_stop_improvement_atr" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">최소 효율</label>
+                            <input type="number" step="0.05" class="form-control form-control-sm" id="cfg_quality_min_efficiency" min="0" max="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">최소 여유 (%)</label>
+                            <input type="number" step="1" class="form-control form-control-sm" id="cfg_quality_min_headroom_pct" min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 9. Display -->
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#secDisplay">
+                    <i class="bi bi-eye me-2"></i>표시 (Display)
+                </button>
+            </h2>
+            <div id="secDisplay" class="accordion-collapse collapse" data-bs-parent="#settingsAccordion">
+                <div class="accordion-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">라벨 언어</label>
+                            <select class="form-select form-select-sm" id="cfg_label_language">
+                                <option value="ko">한국어</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CFG_FIELDS = [
+    // Entry
+    'position_direction', 'entry_source', 'trade_start_bar', 'manual_entry_price',
+    'manual_activation', 'manual_uses_start_time',
+    // Sizing
+    'sizing_mode', 'initial_qty', 'total_capital', 'risk_per_trade_pct',
+    'qty_preset', 'custom_rounding', 'custom_qty_step', 'show_warnings',
+    // Scale-In
+    'enable_manual_scale_ins', 'scale_in_stop_handling', 'pyramid_stop_handling',
+    'avg_down_stop_handling', 'soft_rebase_weight', 'cap_to_risk_budget',
+    'min_add_spacing_atr', 'max_pyramid_adds', 'max_avg_down_adds',
+    'avg_down_allowed_until', 'manual_add_fill_mode',
+    // Conditional Pyramid
+    'enable_conditional_pyramid', 'auto_add_trigger', 'auto_add_qty_mode',
+    'auto_add_fixed_qty', 'auto_add_qty_pct', 'max_auto_adds',
+    'auto_add_cooldown_bars', 'auto_add_base_mfe_atr', 'auto_add_step_mfe_atr',
+    // ATR
+    'atr_length',
+    // Stop
+    'initial_stop_atr_mult', 'trail_arm_trigger_atr', 'trail_arm_after_bars',
+    'time_arm_min_progress_atr', 'trail_arm_on_new_extreme', 'trailing_atr_mult',
+    'use_breakeven_ratchet', 'breakeven_trigger_atr', 'breakeven_offset_atr',
+    'stop_hit_mode', 'update_on_bar_close', 'intrabar_conflict',
+    // Basis
+    'trend_basis_reset', 'breakeven_basis', 'pyramid_favorable_basis',
+    // Adaptive
+    'enable_adaptive_arm_be', 'enable_adaptive_trailing', 'use_hybrid_trailing_atr',
+    'adaptive_lookback', 'atr_regime_lookback', 'early_mfe_mae_window',
+    'use_trade_memory', 'adaptive_history_trades', 'adaptive_history_weight',
+    'trailing_atr_ema_length', 'trailing_atr_higher_tf_weight', 'trailing_atr_early_bars',
+    'trailing_atr_expansion_cap', 'trailing_atr_contraction_floor',
+    'adaptive_arm_be_strength', 'adaptive_trailing_strength',
+    'adaptive_arm_min_atr', 'adaptive_arm_max_atr',
+    'adaptive_be_min_atr', 'adaptive_be_max_atr',
+    'adaptive_trailing_min_atr', 'adaptive_trailing_max_atr',
+    'enable_quality_gate', 'quality_min_trend_mfe_atr',
+    'quality_min_stop_improvement_atr', 'quality_min_efficiency', 'quality_min_headroom_pct',
+    // Display
+    'label_language',
+];
+
+const CHECKBOX_FIELDS = [
+    'manual_uses_start_time', 'show_warnings', 'enable_manual_scale_ins',
+    'cap_to_risk_budget', 'enable_conditional_pyramid', 'trail_arm_on_new_extreme',
+    'use_breakeven_ratchet', 'update_on_bar_close', 'enable_adaptive_arm_be',
+    'enable_adaptive_trailing', 'use_hybrid_trailing_atr', 'use_trade_memory',
+    'enable_quality_gate',
+];
+
+async function loadSettings() {
+    try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        CFG_FIELDS.forEach(field => {
+            const el = document.getElementById(`cfg_${field}`);
+            if (!el) return;
+            if (CHECKBOX_FIELDS.includes(field)) {
+                el.checked = !!cfg[field];
+            } else if (el.tagName === 'SELECT') {
+                el.value = cfg[field] || '';
+            } else {
+                el.value = cfg[field] !== undefined ? cfg[field] : '';
+            }
+        });
+    } catch (err) {
+        showToast('오류', '설정 불러오기 실패', 'danger');
+    }
+}
+
+async function saveSettings() {
+    const data = {};
+    CFG_FIELDS.forEach(field => {
+        const el = document.getElementById(`cfg_${field}`);
+        if (!el) return;
+        if (CHECKBOX_FIELDS.includes(field)) {
+            data[field] = el.checked;
+        } else if (el.type === 'number') {
+            data[field] = el.value !== '' ? parseFloat(el.value) : 0;
+        } else {
+            data[field] = el.value;
+        }
+    });
+
+    const res = await fetchJson('/api/config', data);
+    if (res.error) {
+        showToast('오류', res.error, 'danger');
+    } else {
+        showToast('저장', '설정이 저장되었습니다', 'success');
+        if (res.warnings && res.warnings.length > 0) {
+            const warnDiv = document.getElementById('settingsWarnings');
+            warnDiv.style.display = 'block';
+            warnDiv.innerHTML = res.warnings.map(w =>
+                `<div class="alert alert-warning alert-sm py-1 mb-1"><i class="bi bi-exclamation-triangle me-1"></i>${w}</div>`
+            ).join('');
+        } else {
+            document.getElementById('settingsWarnings').style.display = 'none';
+        }
+    }
+}
+
+async function resetSettings() {
+    if (!confirm('모든 설정을 기본값으로 되돌립니다. 계속하시겠습니까?')) return;
+    const res = await fetchJson('/api/config/reset', {});
+    if (res.success) {
+        showToast('복원', '기본값으로 복원되었습니다', 'info');
+        loadSettings();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+{% endblock %}
