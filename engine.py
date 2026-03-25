@@ -48,7 +48,7 @@ DEFAULT_CONFIG = {
     "pyramid_stop_handling": "keep",
     "avg_down_stop_handling": "keep",
     "soft_rebase_weight": 0.5,
-    "cap_to_risk_budget": True,
+    "cap_to_risk_budget": False,  # 사용자의 실거래 입력을 제한하지 않음 (입력만 허용, 관리는 프로그램에서)
     "min_add_spacing_atr": 0.5,
     "max_pyramid_adds": 3,
     "max_avg_down_adds": 2,
@@ -441,16 +441,16 @@ class TradeEngine:
         self.bar_index = 0
         self.entry_pending = False
         self.manual_touch_occurred = False
+        
+        # 종목별 현재가 캐시 (P&L 계산용)
+        self._price_cache: Dict[str, float] = {}
 
     @property
     def state(self) -> TradeState:
-        """현재 활성 포지션 또는 마지막 작업 포지션 반환 (하위호환성)"""
+        """현재 선택된 종목의 포지션 반환 (다른 종목으로 fallback 안 함)"""
         if self.current_symbol and self.current_symbol in self.states:
             return self.states[self.current_symbol]
-        # 활성 포지션이 하나만 있으면 그것 반환
-        active = [s for s in self.states.values() if s.active]
-        if len(active) == 1:
-            return active[0]
+        # 현재 종목에 포지션 없으면 빈 상태 반환
         return self._legacy_state
     
     @state.setter
@@ -757,57 +757,19 @@ class TradeEngine:
     # ── 추가진입 관련 ─────────────────────────────────────
 
     def _check_scale_in_gates(self, add_type: str, price: float, qty: float) -> tuple:
-        """추가진입 허용 여부를 검사. (allowed, reason) 반환"""
-        cfg = self.config
+        """추가진입 허용 여부를 검사. (항상 True 반환 - 사용자의 실거래 입력을 제한하지 않음)"""
         s = self.state
 
         if not s.active:
-            return False, "거래 비활성"
+            return False, "활성 거래가 없습니다"
 
-        # 방향 검사
-        is_favorable = (s.direction == "long" and price > s.avg_entry) or \
-                       (s.direction == "short" and price < s.avg_entry)
-
-        if add_type == "pyramid" and not is_favorable:
-            return False, "피라미딩은 유리한 방향만 가능"
-        if add_type == "avg_down" and is_favorable:
-            return False, "물타기는 불리한 방향만 가능"
-
-        # 간격 검사
-        if s.last_add_price > 0 and self.current_atr > 0:
-            spacing = abs(price - s.last_add_price) / self.current_atr
-            if spacing < cfg["min_add_spacing_atr"]:
-                return False, f"간격 부족 ({spacing:.2f} < {cfg['min_add_spacing_atr']} ATR)"
-
-        # 횟수 검사
-        if add_type == "pyramid" and s.pyramid_count >= cfg["max_pyramid_adds"]:
-            return False, f"피라미딩 횟수 초과 ({s.pyramid_count}/{cfg['max_pyramid_adds']})"
-        if add_type == "avg_down" and s.avg_down_count >= cfg["max_avg_down_adds"]:
-            return False, f"물타기 횟수 초과 ({s.avg_down_count}/{cfg['max_avg_down_adds']})"
-
-        # 물타기 시점 검사
-        if add_type == "avg_down":
-            if cfg["avg_down_allowed_until"] == "before_trail_armed" and s.trail_armed:
-                return False, "Trail Armed 이후 물타기 불가"
-            if cfg["avg_down_allowed_until"] == "before_breakeven" and s.breakeven_active:
-                return False, "Break-even 이후 물타기 불가"
-
-        # 품질 검사 (피라미딩만)
-        if add_type == "pyramid" and cfg["enable_quality_gate"]:
-            if s.mfe < cfg["quality_min_trend_mfe_atr"]:
-                return False, f"추세 MFE 부족 ({s.mfe:.2f} < {cfg['quality_min_trend_mfe_atr']})"
-            if s.trend_efficiency < cfg["quality_min_efficiency"]:
-                return False, f"효율 부족 ({s.trend_efficiency:.2f} < {cfg['quality_min_efficiency']})"
-            if s.risk_budget > 0:
-                headroom = max(0, s.risk_budget - s.current_risk) / s.risk_budget * 100
-                if headroom < cfg["quality_min_headroom_pct"]:
-                    return False, f"리스크 여유 부족 ({headroom:.1f}% < {cfg['quality_min_headroom_pct']}%)"
-
-        # 리스크 예산 검사
-        if cfg["cap_to_risk_budget"] and s.risk_budget > 0:
-            new_risk = qty * abs(price - s.active_stop)
-            if s.current_risk + new_risk > s.risk_budget:
-                return False, "리스크 예산 초과"
+        # 모든 다른 차단 조건은 제거됨 (사용자의 실거래 입력을 존중)
+        # - 방향 검사 제거
+        # - 간격 검사 제거  
+        # - 횟수 검사 제거
+        # - 시점 검사 제거
+        # - 품질 검사 제거
+        # - 리스크 예산 검사 제거
 
         return True, "통과"
 
@@ -1070,8 +1032,65 @@ class TradeEngine:
 
         result = summary.to_dict()
         result["symbol"] = symbol  # 거래 기록에 종목 코드 추가
+        result["is_partial"] = False  # 전체 청산
         self.trade_history.append(result)
         s.reset()
+        return result
+
+    def _close_partial(self, exit_price: float, qty_to_close: float, symbol: str = "default") -> dict:
+        """부분 청산 (남은 포지션 유지)"""
+        s = self.states.get(symbol, self.state)
+        
+        if qty_to_close >= s.total_qty:
+            # 전체 청산 (이 함수가 아니라 _close_trade 사용해야 함)
+            return self._close_trade(exit_price, "부분청산→전체청산", symbol)
+        
+        summary = TradeSummary()
+        summary.direction = s.direction
+        summary.entry_price = s.entry_price
+        summary.avg_entry = s.avg_entry
+        summary.exit_price = exit_price
+        summary.exit_reason = "부분청산"
+        summary.qty = qty_to_close  # 매도한 수량만
+        summary.bars_held = s.bars_in_trade
+        summary.scale_ins = s.pyramid_count + s.avg_down_count
+        summary.mfe = s.mfe
+        summary.mae = s.mae
+        summary.entry_atr = s.entry_atr
+        summary.entry_time = s.entry_time
+        summary.exit_time = self.bars[-1].timestamp if self.bars else ""
+
+        # 매도한 부분의 손익만 계산
+        if s.direction == "long":
+            summary.pnl = (exit_price - s.avg_entry) * qty_to_close
+        else:
+            summary.pnl = (s.avg_entry - exit_price) * qty_to_close
+
+        if s.avg_entry > 0:
+            summary.pnl_pct = summary.pnl / (s.avg_entry * qty_to_close) * 100
+
+        # 리스크는 매도한 수량 비율로 계산
+        qty_ratio = qty_to_close / s.total_qty
+        summary.initial_risk = s.initial_risk_total * qty_ratio
+        summary.max_risk = s.max_risk * qty_ratio
+        if s.initial_risk_total != 0:
+            summary.r_initial = summary.pnl / abs(summary.initial_risk)
+        if s.max_risk != 0:
+            summary.r_max = summary.pnl / abs(summary.max_risk)
+
+        self._add_event("partial_exit",
+                        f"부분청산: {qty_to_close}주 @ {exit_price:.2f} | 손익: {summary.pnl:+.2f} "
+                        f"({summary.pnl_pct:+.2f}%) | 남은 수량: {s.total_qty - qty_to_close}주")
+
+        result = summary.to_dict()
+        result["symbol"] = symbol
+        result["is_partial"] = True  # 부분 청산
+        result["remaining_qty"] = s.total_qty - qty_to_close
+        self.trade_history.append(result)
+        
+        # 남은 포지션 업데이트 (수량만 줄이고 평균가, 손절가 등은 유지)
+        s.total_qty -= qty_to_close
+        
         return result
 
     # ── 메인 업데이트 루프 ────────────────────────────────
@@ -1430,15 +1449,21 @@ class TradeEngine:
 
         return {"success": True, "state": s.to_dict()}
 
-    def manual_close(self, price: float = 0, symbol: str = "") -> dict:
-        """UI에서 직접 청산"""
+    def manual_close(self, price: float = 0, qty: float = 0, symbol: str = "") -> dict:
+        """UI에서 직접 청산 (전체 또는 부분)"""
         s = self._get_or_create_state(symbol or self.current_symbol or "default")
         if not s.active:
             return {"error": "활성 거래가 없습니다"}
         if price <= 0 and self.bars:
             price = self.bars[-1].close
-        result = self._close_trade(price, "수동청산", symbol or self.current_symbol or "default")
-        return {"success": True, "summary": result}
+        
+        # qty가 0이거나 총 수량과 같으면 전체 청산, 아니면 부분 청산
+        if qty <= 0 or qty >= s.total_qty:
+            result = self._close_trade(price, "수동청산", symbol or self.current_symbol or "default")
+            return {"success": True, "summary": result}
+        else:
+            result = self._close_partial(price, qty, symbol or self.current_symbol or "default")
+            return {"success": True, "summary": result}
 
     # ── 리셋 ──────────────────────────────────────────────
 
@@ -1464,47 +1489,20 @@ class TradeEngine:
 
     # ── 상태 조회 ─────────────────────────────────────────
 
-    def get_status(self) -> dict:
-        # 각 포지션마다 실제 현재 가격으로 P&L 계산 (다중 종목 지원)
-        for symbol, state in self.states.items():
-            if state.active:
-                # 현재 로드된 종목이면 bars의 마지막 가격 사용, 아니면 실시간 조회
-                if symbol == self.current_symbol:
-                    current_price = self.bars[-1].close if self.bars else 0
-                else:
-                    # 다른 종목의 현재 가격 실시간 조회
-                    try:
-                        price_data = MarketDataFetcher.get_latest_price(symbol)
-                        current_price = price_data.get("price", 0)
-                    except:
-                        current_price = 0
-                
-                if current_price > 0:
-                    if state.direction == "long":
-                        state.unrealized_pnl = (current_price - state.avg_entry) * state.total_qty
-                    else:
-                        state.unrealized_pnl = (state.avg_entry - current_price) * state.total_qty
-                    
-                    if state.avg_entry > 0 and state.total_qty > 0:
-                        state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
-                    if state.initial_risk_total != 0:
-                        state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
+    def update_price_cache(self, symbol: str, price: float):
+        """종목별 현재가 캐시 업데이트"""
+        if price > 0:
+            self._price_cache[symbol] = price
 
-        # 현재 활성 포지션들을 모두 반환
-        trades = {}
-        for symbol, state in self.states.items():
-            if state.active or symbol == self.current_symbol:
-                trades[symbol] = state.to_dict()
-        
-        # 하위호환성: 단一 포지션의 경우 "trade" 키도 제공
-        if not trades and self.current_symbol in self.states:
-            trades[self.current_symbol] = self.states[self.current_symbol].to_dict()
-        
+    def get_cached_price(self, symbol: str) -> float:
+        """캐시된 현재가 조회"""
+        return self._price_cache.get(symbol, 0)
+
+    def get_status(self) -> dict:
         current_trade = self.state.to_dict() if self.state.active else None
         
         return {
-            "trade": current_trade,  # 하위호환성 (현재 활성 포지션)
-            "trades": trades,  # 새로운 구조 (모든 포지션)
+            "trade": current_trade,
             "atr": _safe_float(round(self.current_atr, 6)),
             "bar_count": len(self.bars),
             "bar_index": self.bar_index,
@@ -1534,6 +1532,56 @@ class TradeEngine:
             "symbol": self.current_symbol,
         }
 
+    @staticmethod
+    def _get_position_signal(state: "TradeState", current_price: float) -> dict:
+        """포지션 상태를 분석해 매매 조언 신호를 반환한다."""
+        if current_price <= 0 or not state.active:
+            return {"code": "unknown", "label": "정보없음", "emoji": "❔", "advice": "현재가 정보 없음", "color": "secondary"}
+
+        active_stop = state.active_stop
+        r = state.r_multiple
+        pnl_pct = state.unrealized_pnl_pct
+
+        if state.direction == "long":
+            stop_dist_pct = (current_price - active_stop) / current_price * 100 if active_stop > 0 else 100
+            below_stop = current_price <= active_stop
+        else:
+            stop_dist_pct = (active_stop - current_price) / current_price * 100 if active_stop > 0 else 100
+            below_stop = current_price >= active_stop
+
+        if below_stop:
+            return {"code": "stop_hit", "label": "손절선 도달", "emoji": "🚨",
+                    "advice": f"현재가가 손절선({active_stop:,.0f})에 도달! 즉시 매도 권고", "color": "danger"}
+        if stop_dist_pct <= 2.0:
+            return {"code": "stop_near", "label": "손절 임박", "emoji": "⚠️",
+                    "advice": f"손절선까지 {stop_dist_pct:.1f}% 남음. 매도 준비 필요", "color": "warning"}
+        if r >= 3.0:
+            return {"code": "strong_profit", "label": "3R+ 달성", "emoji": "🏆",
+                    "advice": f"수익 {r:.1f}R({pnl_pct:.1f}%). 분할 익절 강력 권고", "color": "success"}
+        if r >= 2.0:
+            return {"code": "profit_target", "label": "익절 권고", "emoji": "🎯",
+                    "advice": f"수익 {r:.1f}R({pnl_pct:.1f}%). 부분 익절 고려", "color": "success"}
+        if r >= 1.0 and state.trail_armed:
+            return {"code": "trailing", "label": "추적 손절 작동", "emoji": "✅",
+                    "advice": f"수익 {r:.1f}R. 추적 손절 작동 중 — 수익 보호 유지", "color": "info"}
+        if state.breakeven_active:
+            return {"code": "breakeven", "label": "본전 보호 중", "emoji": "🛡️",
+                    "advice": "본전 손절 활성. 손실 없이 포지션 유지 중", "color": "info"}
+        if pnl_pct >= 5.0:
+            return {"code": "profit", "label": "수익 중", "emoji": "💰",
+                    "advice": f"수익 {pnl_pct:.1f}%. 추가 상승 대기 또는 부분 익절 고려", "color": "success"}
+        if r <= -1.5:
+            return {"code": "loss_warn", "label": "손실 경보", "emoji": "❌",
+                    "advice": f"손실 {r:.1f}R({pnl_pct:.1f}%). 손절 전략 재검토", "color": "danger"}
+        if pnl_pct <= -3.0:
+            return {"code": "loss", "label": "손실 주의", "emoji": "📉",
+                    "advice": f"손실 {pnl_pct:.1f}%. 손절선({active_stop:,.0f}) 유지 확인", "color": "warning"}
+        if stop_dist_pct <= 5.0:
+            return {"code": "stop_watch", "label": "손절 주시", "emoji": "👀",
+                    "advice": f"손절선까지 {stop_dist_pct:.1f}% 남음. 주시 필요", "color": "warning"}
+        return {"code": "hold", "label": "정상 보유", "emoji": "📊",
+                "advice": f"손절선 {stop_dist_pct:.1f}% 여유. 계획대로 보유", "color": "secondary"}
+
     def get_dashboard_stats(self) -> dict:
         history = self.trade_history
         total = len(history)
@@ -1549,6 +1597,46 @@ class TradeEngine:
         profit_factor = abs(sum(t["pnl"] for t in wins) / sum(t["pnl"] for t in losses)) \
             if losses and sum(t["pnl"] for t in losses) != 0 else 0
 
+        # 전체 활성 포지션 요약
+        active_positions = []
+        total_unrealized_pnl = 0.0
+        for symbol, state in self.states.items():
+            if not state.active:
+                continue
+            if symbol == self.current_symbol and self.bars:
+                cur_price = self.bars[-1].close
+            else:
+                cur_price = self.get_cached_price(symbol)
+
+            if cur_price > 0:
+                if state.direction == "long":
+                    state.unrealized_pnl = (cur_price - state.avg_entry) * state.total_qty
+                else:
+                    state.unrealized_pnl = (state.avg_entry - cur_price) * state.total_qty
+                if state.avg_entry > 0 and state.total_qty > 0:
+                    state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
+                if state.initial_risk_total != 0:
+                    state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
+
+            total_unrealized_pnl += state.unrealized_pnl
+            signal = self._get_position_signal(state, cur_price)
+            active_positions.append({
+                "symbol": symbol,
+                "direction": state.direction,
+                "qty": round(state.total_qty, 6),
+                "avg_entry": round(state.avg_entry, 4),
+                "current_price": round(cur_price, 2) if cur_price > 0 else 0,
+                "unrealized_pnl": round(state.unrealized_pnl, 2),
+                "unrealized_pnl_pct": round(state.unrealized_pnl_pct, 2),
+                "r_multiple": round(state.r_multiple, 3),
+                "active_stop": round(state.active_stop, 4),
+                "initial_stop": round(state.initial_stop, 4),
+                "trailing_stop": round(state.trailing_stop, 4),
+                "breakeven_active": state.breakeven_active,
+                "trail_armed": state.trail_armed,
+                "signal": signal,
+            })
+
         return {
             "total_trades": total,
             "wins": len(wins),
@@ -1559,7 +1647,9 @@ class TradeEngine:
             "avg_win": round(avg_win, 2),
             "avg_loss": round(avg_loss, 2),
             "profit_factor": round(profit_factor, 2),
-            "active_trade": self.state.to_dict() if self.state.active else None,
+            "active_positions": active_positions,
+            "total_unrealized_pnl": round(total_unrealized_pnl, 2),
+            "position_count": len(active_positions),
             "current_atr": round(self.current_atr, 6),
             "bar_count": len(self.bars),
         }
@@ -1572,13 +1662,12 @@ class TradeEngine:
         
         data = {
             "config": self.config,
-            "bars": [b.to_dict() for b in self.bars],
-            "atr_values": self.atr_values,
+            # 봉 데이터는 저장하지 않음 (yfinance에서 필요 시 재조회)
             "trade_history": self.trade_history,
-            "bar_index": self.bar_index,
             "current_symbol": self.current_symbol,
-            "states": states_data,  # 포트폴리오 처리
+            "states": states_data,
             "ticker_info": getattr(self, '_ticker_info', {}),
+            "price_cache": self._price_cache,
         }
         os.makedirs(os.path.dirname(filepath) if os.path.dirname(filepath) else ".", exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
@@ -1590,12 +1679,16 @@ class TradeEngine:
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
         self.config.update(data.get("config", {}))
-        self.bars = [Bar.from_dict(b) for b in data.get("bars", [])]
-        self.atr_values = data.get("atr_values", [])
+        # 봉 데이터는 로드하지 않음 (yfinance에서 필요 시 재조회)
+        # 하위호환: 기존 파일에 bars가 있어도 무시
+        self.bars = []
+        self.atr_values = []
+        self.current_atr = 0.0
+        self.bar_index = 0
         self.trade_history = data.get("trade_history", [])
-        self.bar_index = data.get("bar_index", 0)
         self.current_symbol = data.get("current_symbol", "")
         self._ticker_info = data.get("ticker_info", {})
+        self._price_cache = data.get("price_cache", {})
         
         # 포트폴리오 복원
         states_data = data.get("states", {})
@@ -1604,9 +1697,6 @@ class TradeEngine:
             state = TradeState()
             state.from_dict_restore(state_dict)
             self.states[symbol] = state
-        
-        if self.atr_values:
-            self.current_atr = self.atr_values[-1]
 
 
 # ─── 설정 검증 ──────────────────────────────────────────────
@@ -1663,38 +1753,92 @@ INTERVAL_LABELS = {
 class MarketDataFetcher:
     """yfinance를 이용한 시장 데이터 자동 가져오기"""
 
+    # 주요 국내 종목 (사용자 편의를 위한 매핑)
+    KOREAN_STOCKS = {
+        "삼성전자": "005930.KS",
+        "삼성": "005930.KS",
+        "현대차": "005380.KS",
+        "현대": "005380.KS",
+        "기아": "000270.KS",
+        "신한은행": "088350.KS",
+        "신한": "088350.KS",
+        "우리은행": "086000.KS",
+        "우리": "086000.KS",
+        "카카오": "035720.KS",
+        "네이버": "035420.KS",
+        "naver": "035420.KS",
+        "셀트리온": "068270.KS",
+        "lg전자": "066570.KS",
+        "lg": "066570.KS",
+        "스카이레이크": "064850.KQ",
+        "스카이": "064850.KQ",
+        "삼성전자우": "006400.KS",
+        "삼성전우": "006400.KS",
+    }
+
     @staticmethod
     def search_ticker(query: str) -> list:
-        """종목 검색 (yfinance search)"""
+        """종목 검색 (한글명 + 심볼 + yfinance 검색)"""
         try:
             results = []
-            # 직접 티커로 시도
-            ticker = yf.Ticker(query)
-            info = ticker.info
-            if info and info.get("symbol"):
-                results.append({
-                    "symbol": info.get("symbol", query),
-                    "name": info.get("shortName", info.get("longName", query)),
-                    "exchange": info.get("exchange", ""),
-                    "type": info.get("quoteType", ""),
-                    "currency": info.get("currency", ""),
-                })
-            # yfinance search API
-            search = yf.Search(query, max_results=8)
-            if hasattr(search, 'quotes') and search.quotes:
-                for q in search.quotes:
-                    sym = q.get("symbol", "")
-                    if sym and not any(r["symbol"] == sym for r in results):
+
+            # 1. 한글 종목명 검색 (정확한 매칭)
+            query_lower = query.lower()
+            matched_kr = False
+            for kr_name, symbol in MarketDataFetcher.KOREAN_STOCKS.items():
+                if query_lower in kr_name.lower():
+                    matched_kr = True
+                    # 중복 제거
+                    if not any(r["symbol"] == symbol for r in results):
                         results.append({
-                            "symbol": sym,
-                            "name": q.get("shortname", q.get("longname", sym)),
-                            "exchange": q.get("exchange", ""),
-                            "type": q.get("quoteType", ""),
-                            "currency": q.get("currency", ""),
+                            "symbol": symbol,
+                            "name": kr_name,
+                            "exchange": "KRX",
+                            "type": "Equity",
+                            "currency": "KRW",
                         })
+
+            # 2. 한글이 포함되지 않은 경우만 yfinance 호출 (404 에러 방지)
+            # 한글 입력이면 이 단계는 스킵
+            if not matched_kr and not any(ord(c) > 127 for c in query):  # 한글이 없으면
+                # 직접 티커로 시도 (심볼 검색)
+                try:
+                    ticker = yf.Ticker(query)
+                    info = ticker.info
+                    if info and info.get("symbol"):
+                        if not any(r["symbol"] == info.get("symbol", query) for r in results):
+                            results.append({
+                                "symbol": info.get("symbol", query),
+                                "name": info.get("shortName", info.get("longName", query)),
+                                "exchange": info.get("exchange", ""),
+                                "type": info.get("quoteType", ""),
+                                "currency": info.get("currency", ""),
+                            })
+                except:
+                    pass  # yfinance 에러는 무시
+
+            # 3. yfinance search API (영문만)
+            if not any(ord(c) > 127 for c in query):  # 한글이 없으면
+                if not results or len(results) < 3:
+                    try:
+                        search = yf.Search(query, max_results=5)
+                        if hasattr(search, 'quotes') and search.quotes:
+                            for q in search.quotes:
+                                sym = q.get("symbol", "")
+                                if sym and not any(r["symbol"] == sym for r in results):
+                                    results.append({
+                                        "symbol": sym,
+                                        "name": q.get("shortname", q.get("longname", sym)),
+                                        "exchange": q.get("exchange", ""),
+                                        "type": q.get("quoteType", ""),
+                                        "currency": q.get("currency", ""),
+                                    })
+                    except:
+                        pass
+
             return results[:10]
         except Exception as e:
-            return [{"error": str(e)}]
+            return []
 
     @staticmethod
     def fetch_bars(symbol: str, interval: str = "1d", period: str = None,

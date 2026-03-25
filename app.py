@@ -6,7 +6,7 @@ import os
 import json
 import csv
 import io
-import subprocess
+import threading
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from engine import TradeEngine, Bar, DEFAULT_CONFIG, validate_config, MarketDataFetcher, INTERVAL_PERIODS, INTERVAL_LABELS
 
@@ -26,38 +26,29 @@ if os.path.exists(STATE_FILE):
     except Exception:
         pass
 
+# 시작 시 현재 종목의 봉 데이터 자동 로드 (ATR 계산용)
+fetcher = MarketDataFetcher()
+try:
+    startup_symbol = engine.config.get("ticker_symbol", "")
+    if startup_symbol:
+        bars = fetcher.fetch_bars(
+            startup_symbol,
+            interval=engine.config.get("data_interval", "1d"),
+            count=engine.config.get("data_count", 200)
+        )
+        if bars:
+            for bar in bars:
+                engine.bars.append(bar)
+                engine.bar_index = len(engine.bars) - 1
+                engine._update_atr()
+            engine.update_price_cache(startup_symbol, bars[-1].close)
+except Exception:
+    pass
+
 
 def _save():
-    """반전 데이터 저장 + GitHub 자동 백업"""
+    """state.json에 포지션 데이터 저장"""
     engine.save_state(STATE_FILE)
-    
-    # GitHub 자동 백업 (Railway 배포 후 포지션 손실 방지)
-    try:
-        # git add data/state.json
-        subprocess.run(
-            ["git", "add", "data/state.json"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=True,
-            timeout=5
-        )
-        # git commit
-        result = subprocess.run(
-            ["git", "commit", "-m", "auto: backup positions from Railway"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=True,
-            timeout=5
-        )
-        # git push (변경사항이 있을 때만)
-        if result.returncode == 0 or b"nothing to commit" not in result.stdout + result.stderr:
-            subprocess.run(
-                ["git", "push"],
-                cwd=os.path.dirname(os.path.abspath(__file__)),
-                capture_output=True,
-                timeout=10
-            )
-    except Exception as e:
-        # 백업 실패해도 로컬 파일은 저장됨 (무시)
-        pass
 
 
 # ─── 페이지 라우트 ──────────────────────────────────────────
@@ -297,11 +288,12 @@ def api_manual_add():
 
 @app.route("/api/close", methods=["POST"])
 def api_manual_close():
-    """수동 청산 (포트폴리오 지원)"""
+    """수동 청산 (전체/부분, 포트폴리오 지원)"""
     data = request.get_json() or {}
     price = float(data.get("price", 0))
+    qty = float(data.get("qty", 0))  # 매도 수량 (0이면 전체 매도)
     symbol = data.get("symbol", "")  # 포트폴리오 심볼
-    result = engine.manual_close(price, symbol=symbol)
+    result = engine.manual_close(price, qty=qty, symbol=symbol)
     _save()
     return jsonify(result)
 
@@ -327,25 +319,34 @@ def api_full_reset():
 
 @app.route("/api/positions")
 def api_positions():
-    """모든 활성 포지션 목록 반환 (P&L 실시간 재계산)"""
-    last_close = engine.bars[-1].close if engine.bars else 0
+    """모든 활성 포지션 목록 반환 (종목별 실제 가격으로 P&L 계산)"""
     positions = []
     for symbol, state in engine.states.items():
         if state.active:
-            # P&L 실시간 재계산
-            if last_close > 0:
+            # 현재 로드된 종목이면 bars 가격, 아니면 캐시된 가격 사용
+            if symbol == engine.current_symbol and engine.bars:
+                current_price = engine.bars[-1].close
+            else:
+                current_price = engine.get_cached_price(symbol)
+            
+            # P&L 계산
+            if current_price > 0:
                 if state.direction == "long":
-                    state.unrealized_pnl = (last_close - state.avg_entry) * state.total_qty
+                    state.unrealized_pnl = (current_price - state.avg_entry) * state.total_qty
                 else:
-                    state.unrealized_pnl = (state.avg_entry - last_close) * state.total_qty
+                    state.unrealized_pnl = (state.avg_entry - current_price) * state.total_qty
                 if state.avg_entry > 0 and state.total_qty > 0:
                     state.unrealized_pnl_pct = state.unrealized_pnl / (state.avg_entry * state.total_qty) * 100
+                if state.initial_risk_total != 0:
+                    state.r_multiple = state.unrealized_pnl / abs(state.initial_risk_total)
 
+            signal = engine._get_position_signal(state, current_price)
             positions.append({
                 "symbol": symbol,
                 "direction": state.direction,
                 "qty": state.total_qty,
                 "entry_price": round(state.avg_entry, 6) if state.avg_entry > 0 else 0,
+                "current_price": round(current_price, 2) if current_price > 0 else 0,
                 "unrealized_pnl": round(state.unrealized_pnl, 2),
                 "unrealized_pnl_pct": round(state.unrealized_pnl_pct, 2),
                 "bars_in_trade": state.bars_in_trade,
@@ -359,6 +360,7 @@ def api_positions():
                 "current_risk": round(state.current_risk, 2),
                 "fills": state.fills,
                 "events": state.events[-20:],
+                "signal": signal,
             })
     return jsonify({"positions": positions, "count": len(positions)})
 
@@ -392,7 +394,7 @@ def api_events():
 
 # ─── 시장 데이터 API ────────────────────────────────────────
 
-fetcher = MarketDataFetcher()
+# fetcher는 상단에서 이미 생성됨
 
 
 @app.route("/api/ticker/search")
@@ -469,6 +471,10 @@ def api_ticker_set():
     
     # 현재 선택 종목으로 업데이트 (다중 종목 UI 동기화)
     engine.current_symbol = symbol
+    
+    # 현재가 캐시 업데이트
+    if bars:
+        engine.update_price_cache(symbol, bars[-1].close)
 
     # 설정 업데이트
     engine.config["ticker_symbol"] = symbol
@@ -544,8 +550,28 @@ def api_intervals():
     })
 
 
-# 수정 (Railway에서 작동함)
-import os
+@app.route("/api/prices/refresh", methods=["POST"])
+def api_refresh_prices():
+    """모든 활성 포지션의 현재가 일괄 업데이트"""
+    updated = {}
+    for symbol, state in engine.states.items():
+        if state.active:
+            try:
+                price_data = fetcher.get_latest_price(symbol)
+                price = price_data.get("price", 0)
+                if price > 0:
+                    engine.update_price_cache(symbol, price)
+                    updated[symbol] = price
+            except Exception:
+                pass
+    # 현재 선택된 종목은 bars에서 최신 가격도 업데이트
+    if engine.current_symbol and engine.bars:
+        price = engine.bars[-1].close
+        engine.update_price_cache(engine.current_symbol, price)
+        updated[engine.current_symbol] = price
+    _save()
+    return jsonify({"updated": updated, "count": len(updated)})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))

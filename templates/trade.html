@@ -1,241 +1,204 @@
 {% extends "base.html" %}
-{% block title %}거래 관리 - 거래 관리 시스템{% endblock %}
+{% block title %}내 거래 관리{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <!-- 종목 선택 바 -->
+
+    <!-- 포트폴리오 요약 + 종목 검색 -->
     <div class="card mb-3">
-        <div class="card-body py-2">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label small mb-0">종목 검색</label>
-                    <div class="input-group input-group-sm">
-                        <input type="text" class="form-control" id="tickerSearch"
-                               placeholder="종목명 또는 코드 (예: 삼성전자, AAPL, 005930.KS)"
-                               autocomplete="off">
-                        <button class="btn btn-primary" onclick="searchTicker()" id="btnSearch">
-                            <i class="bi bi-search"></i>
-                        </button>
-                    </div>
-                    <div id="searchResults" class="position-relative">
-                        <div id="searchDropdown" class="dropdown-menu w-100" style="display:none; max-height:300px; overflow-y:auto;"></div>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-0">인터벌</label>
-                    <select class="form-select form-select-sm" id="intervalSelect">
-                        <option value="1m">1분</option>
-                        <option value="5m">5분</option>
-                        <option value="15m">15분</option>
-                        <option value="30m">30분</option>
-                        <option value="1h">1시간</option>
-                        <option value="1d" selected>일봉</option>
-                        <option value="1wk">주봉</option>
-                        <option value="1mo">월봉</option>
-                    </select>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label small mb-0">봉 수</label>
-                    <input type="number" class="form-control form-control-sm" id="barCountInput" value="200" min="20" max="1000">
-                </div>
-                <div class="col-md-3">
-                    <div class="d-flex align-items-center gap-2">
-                        <div id="tickerInfo" class="flex-grow-1 small text-muted">종목을 검색하세요</div>
-                    </div>
-                </div>
-                <div class="col-md-2 text-end">
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-info" onclick="refreshData()" title="데이터 갱신">
-                            <i class="bi bi-arrow-clockwise me-1"></i>갱신
-                        </button>
-                        <button class="btn btn-outline-warning" onclick="resetTrade()" title="거래 리셋">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" onclick="fullReset()" title="전체 리셋">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </div>
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <span><i class="bi bi-briefcase me-2"></i><strong>내 포트폴리오</strong></span>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-info btn-sm" onclick="refreshAllPrices()" title="모든 종목 현재가 새로고침">
+                    <i class="bi bi-arrow-clockwise me-1"></i>가격 새로고침
+                </button>
+                <span class="badge bg-info" id="portfolioSummaryBadge">0개 보유</span>
             </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-dark table-hover mb-0">
+                <thead>
+                    <tr class="table-secondary small">
+                        <th>종목</th><th>방향</th><th>수량</th><th>평균단가</th><th>현재가</th><th>수익률</th><th>손절가</th>
+                    </tr>
+                </thead>
+                <tbody id="portfolioTableBody">
+                    <tr><td class="text-muted" colspan="7">보유 중인 종목이 없습니다. 아래에서 새 포지션을 등록하세요.</td></tr>
+                </tbody>
+                <tfoot id="portfolioTotalRow" style="display:none;">
+                    <tr class="table-dark border-top fw-bold">
+                        <td colspan="5" class="text-end">전체 합계</td>
+                        <td id="totalPnl">--</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     </div>
 
     <div class="row g-3">
         <!-- 왼쪽: 차트 -->
         <div class="col-lg-8">
-            <!-- 현재 종목 정보 -->
+            <!-- 종목 정보 바 -->
             <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-dark rounded" id="tickerBar" style="display:none;">
                 <div>
-                    <span class="fw-bold fs-5" id="tickerSymbolDisplay" title="종목 코드">--</span>
-                    <span class="text-muted ms-2" id="tickerNameDisplay" title="종목 이름"></span>
+                    <span class="fw-bold fs-5" id="tickerSymbolDisplay">--</span>
+                    <span class="text-muted ms-2" id="tickerNameDisplay"></span>
                 </div>
                 <div>
-                    <span class="fs-5 fw-bold me-2" id="currentPriceDisplay" title="현재 가격">--</span>
-                    <span class="badge bg-info" id="chartBarCount" title="불러온 데이터 개수">0봉</span>
-                    <span class="badge bg-secondary ms-1" id="chartAtr" title="변동성 지표">ATR: --</span>
+                    <span class="fs-5 fw-bold me-2" id="currentPriceDisplay">--</span>
+                    <span class="badge bg-secondary ms-1" id="chartAtr">ATR: --</span>
                 </div>
             </div>
-
-            <!-- 차트 영역 -->
             <div class="card mb-3">
                 <div class="card-body p-2">
                     <canvas id="priceChart" height="350"></canvas>
                 </div>
             </div>
+
+            <!-- 매매 가이드 (선택된 종목) -->
+            <div id="tradeGuidePanel" class="card mb-3" style="display:none;">
+                <div class="card-header py-2">
+                    <i class="bi bi-signpost-2 me-2"></i><strong id="guideSymbolTitle">매매 가이드</strong>
+                </div>
+                <div class="card-body py-2" id="tradeGuideContent"></div>
+            </div>
         </div>
 
-        <!-- 오른쪽: 포지션 관리 & 상태 -->
+        <!-- 오른쪽: 입력 & 상세 -->
         <div class="col-lg-4">
-            <!-- 수동 진입 / 청산 -->
+
+            <!-- 종목 검색 -->
             <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-door-open me-2"></i>내 포지션 입력
+                <div class="card-header py-2">
+                    <i class="bi bi-search me-2"></i>종목 검색
                 </div>
-                <div class="card-body">
-                    <div id="entrySection">
-                        <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>지금 내가 가진 포지션(배팅) 정보를 입력하세요</p>
-                        <div class="row g-2 mb-2">
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">종목 심볼 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control form-control-sm" id="entrySymbol" placeholder="예: AAPL, 005930.KS, NVDA">
-                                <div class="form-text">관리할 종목 코드 (위의 종목 검색에서 선택하면 자동 입력됨)</div>
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">진입 날짜</label>
-                                <input type="date" class="form-control form-control-sm" id="entryDate">
-                                <div class="form-text">내가 산(샀) 날짜</div>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">방향</label>
-                                <select class="form-select form-select-sm" id="entryDirection">
-                                    <option value="long">상승 예상 (샀음)</option>
-                                    <option value="short">하락 예상 (팔았음)</option>
-                                </select>
-                                <div class="form-text">주가가 오를 거 같나? 내릴 거 같나?</div>
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">산 가격</label>
-                                <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="예: 50000">
-                                <div class="form-text">내가 산 가격이 얼마였나?</div>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-bold">수량</label>
-                                <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0" placeholder="예: 100주">
-                                <div class="form-text">빈칸으로 두면 자동 계산</div>
-                            </div>
-                        </div>
-                        <button class="btn btn-success btn-sm w-100 mb-2" onclick="manualEntry()">
-                            <i class="bi bi-check-circle me-1"></i>이 포지션으로 관리 시작
+                <div class="card-body py-2">
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="tickerSearch"
+                               placeholder="종목명 또는 코드 (삼성전자, AAPL)" autocomplete="off">
+                        <button class="btn btn-primary" onclick="searchTicker()" id="btnSearch">
+                            <i class="bi bi-search"></i>
                         </button>
                     </div>
-                    <hr class="my-2">
-                    <div id="closeSection">
-                        <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>포지션을 팔(청산)려면:</p>
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold">몇 가격에 팔 건가요?</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="closePrice" value="0" placeholder="예: 55000">
-                            <div class="form-text">0 입력 하면 현재가</div>
-                        </div>
-                        <button class="btn btn-danger btn-sm w-100" onclick="manualClose()">
-                            <i class="bi bi-x-circle me-1"></i>지금 팔기
-                        </button>
+                    <div id="searchResults" class="position-relative">
+                        <div id="searchDropdown" class="dropdown-menu w-100" style="display:none; max-height:250px; overflow-y:auto; background-color:#1a1a1a; border:1px solid #444;"></div>
                     </div>
+                    <div id="tickerInfo" class="small text-muted mt-1">종목을 검색하면 차트와 ATR이 자동으로 로드됩니다</div>
                 </div>
             </div>
 
-            <!-- 추가진입 -->
+            <!-- 새 포지션 등록 -->
             <div class="card mb-3">
-                <div class="card-header">
-                    <i class="bi bi-plus-circle me-2"></i>추가로 더 사기
+                <div class="card-header py-2">
+                    <i class="bi bi-plus-circle me-2"></i>포지션 등록
                 </div>
                 <div class="card-body">
-                    <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>목표 가격에 추가로 더 샀을 때, 여기에 입력하세요</p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-12">
+                            <input type="text" class="form-control form-control-sm" id="entrySymbol" placeholder="종목 코드 (예: AAPL, 005930.KS)">
+                        </div>
+                    </div>
                     <div class="row g-2 mb-2">
                         <div class="col-6">
-                            <label class="form-label small">추가 날짜</label>
-                            <input type="date" class="form-control form-control-sm" id="addDate">
-                            <div class="form-text">선택사항 (특정 날짜 ATR 사용)</div>
+                            <label class="form-label small mb-0">매수일</label>
+                            <input type="date" class="form-control form-control-sm" id="entryDate">
                         </div>
-                        <div class="col-3">
-                            <label class="form-label small">가격</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice" placeholder="ex: 48000" onchange="updateAddTypeExpl()">
-                            <div class="form-text">샀던 가격</div>
-                        </div>
-                        <div class="col-3">
-                            <label class="form-label small">수량</label>
-                            <input type="number" step="any" class="form-control form-control-sm" id="addQty" placeholder="ex: 100">
-                            <div class="form-text">몇 주</div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">방향</label>
+                            <select class="form-select form-select-sm" id="entryDirection">
+                                <option value="long">매수 (롱)</option>
+                                <option value="short">공매도 (숏)</option>
+                            </select>
                         </div>
                     </div>
-                    
-                    <!-- 유형 설명 추가 -->
-                    <div class="mb-3 p-2 bg-dark rounded border border-info small">
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold mb-1">추가진입 유형</label>
-                            <div class="form-text"><i class="bi bi-lightbulb me-1"></i>
-                                <strong>현재 평균:</strong> <span id="currentAvg">--</span>
-                                | <strong>추가 가격:</strong> <span id="comparePrice">--</span>
-                            </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0">매수 가격</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="entryPrice" placeholder="50000">
                         </div>
-                        <select class="form-select form-select-sm" id="addType" onchange="updateAddTypeExpl()">
-                            <option value="pyramid">📈 피라미딩 - 좋은 방향으로 추가 (평균가보다 높게/낮게)</option>
-                            <option value="avg_down">📉 물타기 - 나쁜 방향으로 추가 (손실감수)</option>
-                        </select>
-                        <div id="typeExpl" class="form-text mt-1"></div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">수량</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="entryQty" value="0" placeholder="100">
+                        </div>
                     </div>
-                    
-                    <button class="btn btn-info btn-sm w-100" onclick="manualAdd()">
-                        <i class="bi bi-plus me-1"></i>추가 진입 기록
+                    <button class="btn btn-success btn-sm w-100" onclick="manualEntry()">
+                        <i class="bi bi-check-circle me-1"></i>포지션 등록
                     </button>
                 </div>
             </div>
 
-            <!-- 거래 상태 패널 -->
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-speedometer2 me-2"></i>내 포트폴리오</span>
-                    <span class="badge" id="tradeStatusBadge">대기</span>
+            <!-- 선택 종목 상세 (포지션이 있을 때) -->
+            <div id="positionDetailCard" class="card mb-3" style="display:none;">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-bar-chart me-2"></i><strong id="detailSymbolTitle">상세</strong></span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-danger btn-sm" onclick="closeSelectedPosition()" title="매도(청산)">
+                            <i class="bi bi-x-circle me-1"></i>매도
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="resetSelectedPosition()" title="리셋">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="trade-status-panel" id="tradeStatusPanel">
-                        <table class="table table-sm table-dark mb-0">
-                            <tbody id="statusTableBody">
-                                <tr><td class="text-muted" colspan="6">포지션이 없습니다</td></tr>
-                            </tbody>
-                        </table>
+                <div class="card-body p-2" id="positionDetailContent"></div>
+            </div>
+
+            <!-- 추가 매수 (포지션이 있을 때) -->
+            <div id="addEntryCard" class="card mb-3" style="display:none;">
+                <div class="card-header py-2">
+                    <i class="bi bi-cart-plus me-2"></i>추가 매수
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label class="form-label small mb-0">날짜</label>
+                            <input type="date" class="form-control form-control-sm" id="addDate">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">가격</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="addPrice" placeholder="48000" onchange="updateAddTypeExpl()">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">수량</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="addQty" placeholder="100">
+                        </div>
                     </div>
-                    <!-- 선택된 포지션 상세 정보 -->
-                    <div id="positionDetail" class="p-3 bg-dark border-top" style="display:none;">
-                        <div id="positionDetailContent"></div>
+                    <div class="mb-2">
+                        <select class="form-select form-select-sm" id="addType" onchange="updateAddTypeExpl()">
+                            <option value="pyramid">피라미딩 (수익 방향 추가 매수)</option>
+                            <option value="avg_down">물타기 (손실 방향 추가 매수)</option>
+                        </select>
+                        <div id="typeExpl" class="form-text small mt-1"></div>
                     </div>
-                    <div class="p-3 bg-dark border-top small text-muted">
-                        <i class="bi bi-lightbulb me-1"></i>
-                        <strong>사용법:</strong> 
-                        종목을 클릭하면 상세 정보와 매매 가이드가 표시됩니다.
-                    </div>
+                    <button class="btn btn-info btn-sm w-100" onclick="manualAdd()">
+                        <i class="bi bi-plus me-1"></i>추가 매수 기록
+                    </button>
                 </div>
             </div>
 
-            <!-- 이벤트 로그 -->
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-hourglass-split me-2"></i>거래 기록</span>
-                    <span class="badge bg-secondary" id="eventLogCount">0</span>
+            <!-- 매도 가격 입력 -->
+            <div id="closeCard" class="card mb-3" style="display:none;">
+                <div class="card-header py-2">
+                    <i class="bi bi-cash-stack me-2"></i>매도 (청산)
                 </div>
-                <div class="card-body p-0">
-                    <div class="event-list bg-dark" id="eventLog" style="max-height: 280px; overflow-y: auto;">
-                        <div class="text-center text-muted py-4 small"><i class="bi bi-inbox me-1"></i>거래 기록이 없습니다</div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0">매도 가격 (0이면 현재가)</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="closePrice" value="0" placeholder="55000">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">매도 수량 (0이면 전부)</label>
+                            <input type="number" step="any" class="form-control form-control-sm" id="closeQty" value="0" placeholder="전량 매도">
+                        </div>
                     </div>
-                    <div class="p-2 bg-dark border-top small text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>뜻:</strong> 🔓 진입=살 때 / ❌ 손절=손실 제한 / 🎯 준비=자동 기능 준비됨 / 🔒 청산=팔 때
-                    </div>
+                    <button class="btn btn-danger btn-sm w-100" onclick="manualClose()">
+                        <i class="bi bi-x-circle me-1"></i>매도 실행
+                    </button>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -245,7 +208,9 @@
 <script>
 let priceChart = null;
 let currentSymbol = '';
+let selectedPositionSymbol = '';
 let searchTimeout = null;
+let lastChartJson = '';
 
 // ── 종목 검색 ───────────────────────────────────────────
 
@@ -260,13 +225,9 @@ document.getElementById('tickerSearch').addEventListener('input', function() {
 });
 
 document.getElementById('tickerSearch').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        searchTicker();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); searchTicker(); }
 });
 
-// 클릭 시 드롭다운 닫기
 document.addEventListener('click', function(e) {
     if (!e.target.closest('#searchResults') && !e.target.closest('#tickerSearch')) {
         document.getElementById('searchDropdown').style.display = 'none';
@@ -276,381 +237,278 @@ document.addEventListener('click', function(e) {
 async function searchTicker() {
     const q = document.getElementById('tickerSearch').value.trim();
     if (!q) return;
-
     document.getElementById('btnSearch').innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
     try {
         const res = await fetch(`/api/ticker/search?q=${encodeURIComponent(q)}`);
         const results = await res.json();
         const dropdown = document.getElementById('searchDropdown');
-
         if (!results.length || results[0]?.error) {
             dropdown.innerHTML = '<div class="dropdown-item text-muted">검색 결과 없음</div>';
             dropdown.style.display = 'block';
             return;
         }
-
         dropdown.innerHTML = results.map(r => `
             <a class="dropdown-item d-flex justify-content-between" href="#"
                onclick="selectTicker('${r.symbol}', '${(r.name || '').replace(/'/g, "\\'")}'); return false;">
-                <div>
-                    <strong>${r.symbol}</strong>
-                    <span class="text-muted ms-2">${r.name || ''}</span>
-                </div>
-                <small class="text-muted">${r.exchange || ''} ${r.type || ''}</small>
+                <div><strong>${r.symbol}</strong> <span class="text-muted ms-2">${r.name || ''}</span></div>
+                <small class="text-muted">${r.exchange || ''}</small>
             </a>
         `).join('');
         dropdown.style.display = 'block';
-    } catch (err) {
-        console.error(err);
-    } finally {
-        document.getElementById('btnSearch').innerHTML = '<i class="bi bi-search"></i>';
-    }
+    } catch (err) { console.error(err); }
+    finally { document.getElementById('btnSearch').innerHTML = '<i class="bi bi-search"></i>'; }
 }
 
 async function selectTicker(symbol, name) {
     document.getElementById('searchDropdown').style.display = 'none';
     document.getElementById('tickerSearch').value = symbol;
-    document.getElementById('entrySymbol').value = symbol;  // 포트폴리오: 진입 폼에도 심볼 설정
-    document.getElementById('tickerInfo').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>데이터 로딩 중...';
-
-    const interval = document.getElementById('intervalSelect').value;
-    const count = parseInt(document.getElementById('barCountInput').value) || 200;
+    document.getElementById('entrySymbol').value = symbol;
+    document.getElementById('tickerInfo').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>차트 로딩 중...';
 
     try {
-        const res = await fetchJson('/api/ticker/set', { symbol, interval, count });
+        const res = await fetchJson('/api/ticker/set', { symbol, interval: '1d', count: 200 });
         if (res.error) {
             showToast('오류', res.error, 'danger');
             document.getElementById('tickerInfo').textContent = res.error;
             return;
         }
-
         currentSymbol = symbol;
-        lastChartJson = '';  // 차트 캐시 초기화 (새 종목 차트 강제 로드)
+        lastChartJson = '';
 
-        // UI 업데이트
         document.getElementById('tickerBar').style.display = 'flex';
         document.getElementById('tickerBar').classList.add('d-flex');
         document.getElementById('tickerSymbolDisplay').textContent = symbol;
         document.getElementById('tickerNameDisplay').textContent = res.name || '';
         document.getElementById('currentPriceDisplay').textContent = res.last_price?.toLocaleString() || '--';
         document.getElementById('tickerInfo').innerHTML =
-            `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${res.name} | ${res.bars_loaded}봉 로드 | ATR: ${res.atr?.toFixed(2)}</span>`;
+            `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${res.name} | ATR: ${res.atr?.toFixed(2)}</span>`;
 
-        showToast('종목 로드', `${symbol} ${res.bars_loaded}봉 로드 완료`, 'success');
-        loadTradeStatus();  // 이 함수 안에서 포지션 정보 + 차트 로드
+        // 이 종목에 포지션이 있으면 자동 선택
+        selectedPositionSymbol = symbol;
+        loadAll();
     } catch (err) {
-        showToast('오류', '데이터 로드 실패', 'danger');
         document.getElementById('tickerInfo').textContent = '로드 실패';
     }
 }
 
-async function refreshData() {
-    if (!currentSymbol && !document.getElementById('tickerSymbolDisplay').textContent.includes('--')) {
-        // 이미 설정된 종목이 있으면 그걸로 갱신
-    }
+// ── 데이터 로드 ──────────────────────────────────────────
 
-    document.getElementById('tickerInfo').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>갱신 중...';
-
+async function loadAll() {
     try {
-        const res = await fetchJson('/api/ticker/refresh', {});
-        if (res.error) {
-            // 종목이 없으면 tickerSearch 값으로 재시도
-            const sym = document.getElementById('tickerSearch').value.trim();
-            if (sym) {
-                const interval = document.getElementById('intervalSelect').value;
-                const count = parseInt(document.getElementById('barCountInput').value) || 200;
-                await selectTicker(sym, '');
-                return;
-            }
-            showToast('오류', res.error, 'warning');
-            document.getElementById('tickerInfo').textContent = res.error;
-            return;
-        }
-
-        document.getElementById('currentPriceDisplay').textContent = res.last_price?.toLocaleString() || '--';
-        document.getElementById('tickerInfo').innerHTML =
-            `<span class="text-success"><i class="bi bi-check-circle me-1"></i>갱신 완료 | ${res.bars_loaded}봉 | ATR: ${res.atr?.toFixed(2)}</span>`;
-
-        showToast('갱신', `${res.bars_loaded}봉 갱신 완료`, 'info');
-        loadTradeStatus();
-    } catch (err) {
-        document.getElementById('tickerInfo').textContent = '갱신 실패';
-    }
-}
-
-// ── 거래 상태 로드 ───────────────────────────────────────
-
-async function loadTradeStatus() {
-    try {
-        const res = await fetch('/api/status');
-        const data = await res.json();
-        updateTradePanel(data);
-        updatePriceChart(data);
+        const [statusRes, posRes] = await Promise.all([
+            fetch('/api/status').then(r => r.json()),
+            fetch('/api/positions').then(r => r.json()),
+        ]);
+        renderPortfolio(posRes);
+        updateChart();
+        updateNavbar(statusRes, posRes);
 
         // 종목 정보 복원
-        if (data.config?.ticker_symbol && !currentSymbol) {
-            currentSymbol = data.config.ticker_symbol;
+        if (statusRes.config?.ticker_symbol && !currentSymbol) {
+            currentSymbol = statusRes.config.ticker_symbol;
             document.getElementById('tickerSearch').value = currentSymbol;
             document.getElementById('tickerSymbolDisplay').textContent = currentSymbol;
-            document.getElementById('tickerNameDisplay').textContent = data.config.ticker_name || '';
-            document.getElementById('intervalSelect').value = data.config.data_interval || '1d';
-            document.getElementById('barCountInput').value = data.config.data_count || 200;
-            if (data.bar_count > 0) {
+            document.getElementById('tickerNameDisplay').textContent = statusRes.config.ticker_name || '';
+            if (statusRes.bar_count > 0) {
                 document.getElementById('tickerBar').style.display = 'flex';
                 document.getElementById('tickerBar').classList.add('d-flex');
-                document.getElementById('tickerInfo').innerHTML =
-                    `<span class="text-success">${data.config.ticker_name} | ${data.bar_count}봉 | ATR: ${data.atr > 0 ? data.atr.toFixed(2) : '--'}</span>`;
             }
         }
-
-        // 방향 셀렉트 동기화
-        if (data.config?.position_direction) {
-            document.getElementById('entryDirection').value = data.config.position_direction;
+        if (statusRes.config?.position_direction) {
+            document.getElementById('entryDirection').value = statusRes.config.position_direction;
         }
-    } catch (err) {
-        console.error(err);
+        document.getElementById('chartAtr').textContent = `ATR: ${statusRes.atr > 0 ? statusRes.atr.toFixed(2) : '--'}`;
+    } catch (err) { console.error(err); }
+}
+
+function updateNavbar(status, posData) {
+    const navEl = document.getElementById('navStatus');
+    if (posData.count > 0) {
+        navEl.textContent = `${posData.count}개 보유`;
+        navEl.className = 'badge bg-info';
+    } else {
+        navEl.textContent = '대기';
+        navEl.className = 'badge bg-secondary';
+    }
+    document.getElementById('navAtr').textContent = `ATR: ${status.atr > 0 ? status.atr.toFixed(4) : '--'}`;
+}
+
+// ── 포트폴리오 테이블 ────────────────────────────────────
+
+function renderPortfolio(posData) {
+    const positions = posData.positions || [];
+    window._allPositions = positions;
+    const tbody = document.getElementById('portfolioTableBody');
+    const badge = document.getElementById('portfolioSummaryBadge');
+    const totalRow = document.getElementById('portfolioTotalRow');
+
+    if (positions.length === 0) {
+        badge.textContent = '0개 보유';
+        tbody.innerHTML = '<tr><td class="text-muted" colspan="7">보유 중인 종목이 없습니다. 아래에서 새 포지션을 등록하세요.</td></tr>';
+        totalRow.style.display = 'none';
+        document.getElementById('positionDetailCard').style.display = 'none';
+        document.getElementById('addEntryCard').style.display = 'none';
+        document.getElementById('closeCard').style.display = 'none';
+        document.getElementById('tradeGuidePanel').style.display = 'none';
+        return;
+    }
+
+    const totalPnl = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
+    const pnlColor = totalPnl >= 0 ? 'text-success' : 'text-danger';
+    badge.innerHTML = `${positions.length}개 보유 | <span class="${pnlColor}">${formatCurrency(totalPnl)}</span>`;
+
+    tbody.innerHTML = positions.map(pos => {
+        const dir = pos.direction === 'long' ? '<span class="text-success">매수</span>' : '<span class="text-danger">공매도</span>';
+        const pc = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
+        const selected = pos.symbol === selectedPositionSymbol ? 'table-active' : '';
+        return `<tr class="${selected}" onclick="onSelectPosition('${pos.symbol}')" style="cursor:pointer;">
+            <td class="fw-bold">${pos.symbol}</td>
+            <td>${dir}</td>
+            <td>${pos.qty.toLocaleString()}</td>
+            <td>${pos.entry_price.toLocaleString()}</td>
+            <td>${pos.current_price ? pos.current_price.toLocaleString() : '--'}</td>
+            <td class="${pc} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(1)}%)</td>
+            <td class="text-danger">${pos.active_stop > 0 ? pos.active_stop.toLocaleString() : '--'}</td>
+        </tr>`;
+    }).join('');
+
+    totalRow.style.display = '';
+    document.getElementById('totalPnl').innerHTML = `<span class="${pnlColor}">${formatCurrency(totalPnl)}</span>`;
+
+    // 자동 선택: 현재 선택된 종목이 없거나 목록에 없으면 첫 번째 선택
+    if (!selectedPositionSymbol || !positions.find(p => p.symbol === selectedPositionSymbol)) {
+        selectedPositionSymbol = positions[0].symbol;
+    }
+    showPositionDetail(selectedPositionSymbol);
+}
+
+// ── 포지션 선택 & 상세 ───────────────────────────────────
+
+function onSelectPosition(symbol) {
+    selectedPositionSymbol = symbol;
+    document.getElementById('entrySymbol').value = symbol;
+
+    // 해당 종목 차트 로드 (현재 로드된 종목과 다르면)
+    if (symbol !== currentSymbol) {
+        selectTicker(symbol, '');
+    } else {
+        showPositionDetail(symbol);
+        // 테이블 하이라이트 갱신
+        document.querySelectorAll('#portfolioTableBody tr').forEach(tr => tr.classList.remove('table-active'));
+        const rows = document.querySelectorAll('#portfolioTableBody tr');
+        rows.forEach(tr => {
+            if (tr.onclick && tr.textContent.includes(symbol)) tr.classList.add('table-active');
+        });
     }
 }
 
-function updateTradePanel(data) {
-    const badge = document.getElementById('tradeStatusBadge');
-    const tbody = document.getElementById('statusTableBody');
-
-    // 포트폴리오 API 호출으로 모든 포지션 가져오기
-    fetch('/api/positions')
-        .then(r => r.json())
-        .then(posData => {
-            const positions = posData.positions || [];
-            window._allPositions = positions;  // 상세보기용 저장
-            
-            if (positions.length === 0) {
-                badge.textContent = '대기 중';
-                badge.className = 'badge bg-secondary';
-                tbody.innerHTML = '<tr><td class="text-muted" colspan="6"><i class="bi bi-clock me-1"></i>포지션이 없습니다. 위의 "내 포지션 입력"에서 시작하세요!</td></tr>';
-                document.getElementById('positionDetail').style.display = 'none';
-            } else {
-                // 전체 포트폴리오 요약
-                const totalPnl = positions.reduce((sum, p) => sum + p.unrealized_pnl, 0);
-                const pnlColor = totalPnl >= 0 ? 'text-success' : 'text-danger';
-                badge.innerHTML = `📊 ${positions.length}개 | 총 손익: <span class="${pnlColor}">${formatCurrency(totalPnl)}</span>`;
-                badge.className = 'badge bg-info';
-                
-                // 포지션 목록 테이블
-                let tableHtml = `<tr class="table-secondary">
-                    <th>종목</th><th>방향</th><th>수량</th><th>평균단가</th><th>손익</th><th>손절가</th>
-                </tr>`;
-                positions.forEach(pos => {
-                    const dir = pos.direction === 'long' ? '📈' : '📉';
-                    const pnl_color = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
-                    tableHtml += `<tr class="cursor-pointer position-row" onclick="selectPosition('${pos.symbol}')" style="cursor:pointer;" title="클릭하면 상세 정보를 봅니다">
-                        <td class="fw-bold">${pos.symbol}</td>
-                        <td>${dir}</td>
-                        <td>${pos.qty.toLocaleString()}</td>
-                        <td>${pos.entry_price.toLocaleString()}</td>
-                        <td class="${pnl_color} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td>
-                        <td class="text-danger">${pos.active_stop.toLocaleString()}</td>
-                    </tr>`;
-                });
-                // 전체 합계 행
-                tableHtml += `<tr class="table-dark border-top">
-                    <td colspan="4" class="fw-bold text-end">전체 합계</td>
-                    <td class="${pnlColor} fw-bold">${formatCurrency(totalPnl)}</td>
-                    <td></td>
-                </tr>`;
-                tbody.innerHTML = tableHtml;
-                
-                // 자동으로 첫번째 포지션 상세 보기 (이미 없으면)
-                if (!document.getElementById('positionDetail').style.display || document.getElementById('positionDetail').style.display === 'none') {
-                    selectPosition(positions[0].symbol);
-                }
-            }
-            
-            // 이벤트 로그 (현재 심볼의 이벤트)
-            fetch('/api/events')
-                .then(r => r.json())
-                .then(events => {
-                    if (events && events.length > 0) {
-                        document.getElementById('eventLogCount').textContent = events.length;
-                        document.getElementById('eventLog').innerHTML = events.slice(-30).reverse().map(e => {
-                            let icon = '📌';
-                            if (e.type === 'entry') icon = '🔓 진입';
-                            else if (e.type === 'stop_hit') icon = '❌ 손절';
-                            else if (e.type === 'trail_armed') icon = '🎯 주문 준비';
-                            else if (e.type === 'breakeven') icon = '🛡️ 보호';
-                            else if (e.type === 'trailing_stop') icon = '📉 추적';
-                            else if (e.type === 'exit') icon = '🔒 청산';
-                            else if (e.type === 'scale_in') icon = '➕ 추가';
-                            
-                            return `<div class="event-item event-${e.type} small border-bottom py-2">
-                                <strong>${icon}</strong>
-                                <span>${e.message}</span>
-                                <span class="text-muted float-end">#${e.bar}</span>
-                            </div>`;
-                        }).join('');
-                    } else {
-                        document.getElementById('eventLogCount').textContent = '0';
-                        document.getElementById('eventLog').innerHTML = '<div class="text-center text-muted py-4 small"><i class="bi bi-inbox me-1"></i>거래 기록이 없습니다</div>';
-                    }
-                });
-        });
-
-    // 차트 정보
-    document.getElementById('chartBarCount').textContent = `${data.bar_count}봉`;
-    document.getElementById('chartAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
-
-    // 네비 업데이트
-    const navEl = document.getElementById('navStatus');
-    
-    fetch('/api/positions')
-        .then(r => r.json())
-        .then(posData => {
-            if (posData.count > 0) {
-                navEl.textContent = `📊 ${posData.count}개`;
-                navEl.className = 'badge bg-info';
-            } else {
-                navEl.textContent = '⏸️ 대기';
-                navEl.className = 'badge bg-secondary';
-            }
-        });
-    document.getElementById('navAtr').textContent = `ATR: ${data.atr > 0 ? data.atr.toFixed(4) : '--'}`;
-}
-
-// 포지션 선택 → 상세 정보 + 매매 가이드 표시
-function selectPosition(symbol) {
-    document.getElementById('entrySymbol').value = symbol;
-    
+function showPositionDetail(symbol) {
     const positions = window._allPositions || [];
     const pos = positions.find(p => p.symbol === symbol);
-    if (!pos) return;
-    
-    // 현재 선택된 포지션을 전역변수에 저장 (추가진입 폼에서 참고)
+    if (!pos) {
+        document.getElementById('positionDetailCard').style.display = 'none';
+        document.getElementById('addEntryCard').style.display = 'none';
+        document.getElementById('closeCard').style.display = 'none';
+        document.getElementById('tradeGuidePanel').style.display = 'none';
+        return;
+    }
+
     window._currentPosition = pos;
-    
-    // 추가진입 폼에서 현재 평균가 표시
-    document.getElementById('currentAvg').textContent = pos.entry_price.toLocaleString();
-    document.getElementById('comparePrice').textContent = '--';
-    document.getElementById('addPrice').value = '';  // 입력 초기화
-    
-    const detailDiv = document.getElementById('positionDetail');
-    const contentDiv = document.getElementById('positionDetailContent');
-    detailDiv.style.display = 'block';
-    
-    const dir = pos.direction === 'long' ? '📈 상승 예상 (롱)' : '📉 하락 예상 (숏)';
+
+    // 상세 정보
+    document.getElementById('positionDetailCard').style.display = '';
+    document.getElementById('addEntryCard').style.display = '';
+    document.getElementById('closeCard').style.display = '';
+
+    const dir = pos.direction === 'long' ? '매수 (롱)' : '공매도 (숏)';
     const pnlColor = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
-    
-    // 매매 가이드 생성
-    let guide = '';
+    document.getElementById('detailSymbolTitle').textContent = `${symbol} 포지션 상세`;
+
+    let fillsHtml = '';
+    if (pos.fills && pos.fills.length > 0) {
+        fillsHtml = '<div class="mt-2 small"><strong>거래 이력:</strong>' + pos.fills.map(f => {
+            const t = f.type === 'entry' ? '진입' : f.type === 'pyramid' ? '피라미딩' : '물타기';
+            return `<div class="text-muted">${t}: ${f.qty}주 @ ${f.price.toLocaleString()}</div>`;
+        }).join('') + '</div>';
+    }
+
+    document.getElementById('positionDetailContent').innerHTML = `
+        <table class="table table-sm table-dark mb-1 small">
+            <tr><td>방향</td><td><span class="badge ${pos.direction === 'long' ? 'bg-success' : 'bg-danger'}">${dir}</span></td></tr>
+            <tr><td>평균 단가</td><td class="fw-bold">${pos.entry_price.toLocaleString()}</td></tr>
+            <tr><td>보유 수량</td><td>${pos.qty.toLocaleString()}주</td></tr>
+            <tr><td>현재가</td><td>${pos.current_price ? pos.current_price.toLocaleString() : '--'}</td></tr>
+            <tr><td>수익/손실</td><td class="${pnlColor} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td></tr>
+            <tr><td>R 배수</td><td>${pos.r_multiple.toFixed(2)}</td></tr>
+            <tr class="border-top"><td>초기 손절가</td><td class="text-danger">${pos.initial_stop > 0 ? pos.initial_stop.toLocaleString() : '--'}</td></tr>
+            <tr><td><strong>현재 손절가</strong></td><td class="fw-bold text-danger">${pos.active_stop > 0 ? pos.active_stop.toLocaleString() : '--'}</td></tr>
+            <tr><td>추적 손절</td><td class="text-warning">${pos.trailing_stop > 0 ? pos.trailing_stop.toLocaleString() : '미활성'}</td></tr>
+            <tr><td>본전 보호</td><td class="text-info">${pos.breakeven_stop > 0 ? pos.breakeven_stop.toLocaleString() : '미활성'}</td></tr>
+            <tr class="border-top"><td>피라미딩</td><td>${pos.pyramid_count}회</td></tr>
+            <tr><td>물타기</td><td>${pos.avg_down_count}회</td></tr>
+        </table>
+        ${fillsHtml}
+    `;
+
+    // 매매 가이드
+    showTradeGuide(pos);
+}
+
+function showTradeGuide(pos) {
+    const panel = document.getElementById('tradeGuidePanel');
+    const content = document.getElementById('tradeGuideContent');
+    const title = document.getElementById('guideSymbolTitle');
+    panel.style.display = '';
+    title.textContent = `${pos.symbol} 매매 가이드`;
+
     const stopDist = Math.abs(pos.entry_price - pos.active_stop);
-    const stopPct = pos.entry_price > 0 ? (stopDist / pos.entry_price * 100).toFixed(2) : 0;
-    
+    const stopPct = pos.entry_price > 0 ? (stopDist / pos.entry_price * 100).toFixed(1) : 0;
+
+    let guide = '';
     if (pos.unrealized_pnl_pct > 0) {
-        // 수익 중
         if (pos.trailing_stop > 0) {
-            guide = `<div class="alert alert-success py-2 mb-0">
-                <strong>✅ 수익 중 — 추적 손절 활성</strong><br>
-                <small>추적 손절가(${pos.trailing_stop.toLocaleString()}) 이하로 떨어지면 자동 청산됩니다. 수익을 지키면서 더 오를 수 있도록 지켜보세요.</small>
+            guide = `<div class="alert alert-success py-2 mb-0 small">
+                <strong>수익 중 — 추적 손절 활성</strong><br>
+                현재 가격이 <strong>${pos.trailing_stop.toLocaleString()}</strong> 아래로 떨어지면 매도하세요.<br>
+                수익을 보호하면서 추가 상승을 기다립니다.
             </div>`;
         } else if (pos.breakeven_stop > 0) {
-            guide = `<div class="alert alert-info py-2 mb-0">
-                <strong>🛡️ 본전 보호 중</strong><br>
-                <small>본전가(${pos.breakeven_stop.toLocaleString()}) 아래로 안 내려가도록 걸려 있습니다. 손실 없이 지켜보세요.</small>
+            guide = `<div class="alert alert-info py-2 mb-0 small">
+                <strong>수익 중 — 본전 보호 활성</strong><br>
+                본전가 <strong>${pos.breakeven_stop.toLocaleString()}</strong> 아래로 안 내려가도록 걸려있습니다.
             </div>`;
         } else {
-            guide = `<div class="alert alert-warning py-2 mb-0">
-                <strong>📊 수익 중 — 손절 아직 진입가 위로 안 올라옴</strong><br>
-                <small>현재 손절가(${pos.active_stop.toLocaleString()})는 진입가 아래입니다. 더 올라가면 자동으로 보호 수준이 올라갑니다.</small>
+            guide = `<div class="alert alert-warning py-2 mb-0 small">
+                <strong>수익 중 — 아직 보호 수준 미도달</strong><br>
+                현재 손절가: <strong>${pos.active_stop.toLocaleString()}</strong> (진입가 대비 ${stopPct}% 거리)<br>
+                더 오르면 자동으로 손절가가 올라갑니다.
             </div>`;
         }
     } else {
-        // 손실 중
-        guide = `<div class="alert alert-danger py-2 mb-0">
-            <strong>⚠️ 손실 중 (${pos.unrealized_pnl_pct.toFixed(2)}%)</strong><br>
-            <small>현재 손절가: ${pos.active_stop.toLocaleString()} (진입가 대비 ${stopPct}% 거리). 이 가격에 도달하면 손절하세요. 물타기는 신중하게!</small>
+        guide = `<div class="alert alert-danger py-2 mb-0 small">
+            <strong>손실 중 (${pos.unrealized_pnl_pct.toFixed(1)}%)</strong><br>
+            현재 손절가: <strong>${pos.active_stop.toLocaleString()}</strong> (진입가 대비 ${stopPct}% 거리)<br>
+            이 가격에 도달하면 손절하세요.
         </div>`;
     }
-    
-    // 거래 이력 (fills)
-    let fillsHtml = '';
-    if (pos.fills && pos.fills.length > 0) {
-        fillsHtml = `<div class="mt-2">
-            <strong class="small">📋 거래 이력:</strong>
-            <div class="small mt-1">` + pos.fills.map(f => {
-                const typeStr = f.type === 'entry' ? '🔓 진입' : f.type === 'pyramid' ? '📈 피라미딩' : '📉 물타기';
-                return `<div class="text-muted">${typeStr}: ${f.qty}주 @ ${f.price.toLocaleString()} → 평균 ${f.avg_after.toLocaleString()}</div>`;
-            }).join('') + `</div></div>`;
-    }
-    
-    contentDiv.innerHTML = `
-        <div class="mb-2">
-            <strong class="fs-6">${symbol}</strong> <span class="badge ${pos.direction === 'long' ? 'bg-success' : 'bg-danger'}">${dir}</span>
-        </div>
-        <table class="table table-sm table-dark mb-2">
-            <tr><td width="40%">평균 단가</td><td class="fw-bold">${pos.entry_price.toLocaleString()}</td></tr>
-            <tr><td>보유 수량</td><td>${pos.qty.toLocaleString()}</td></tr>
-            <tr><td>미실현 손익</td><td class="${pnlColor} fw-bold">${formatCurrency(pos.unrealized_pnl)} (${pos.unrealized_pnl_pct.toFixed(2)}%)</td></tr>
-            <tr><td>R 배수</td><td>${pos.r_multiple.toFixed(2)}배</td></tr>
-            <tr><td>보유 기간</td><td>${pos.bars_in_trade}봉</td></tr>
-            <tr class="table-danger"><td colspan="2"><strong>손절 정보</strong></td></tr>
-            <tr><td>초기 손절가</td><td class="text-danger">${pos.initial_stop.toLocaleString()}</td></tr>
-            <tr><td>활성 손절가</td><td class="fw-bold text-danger">${pos.active_stop.toLocaleString()}</td></tr>
-            <tr><td>추적 손절</td><td class="text-warning">${pos.trailing_stop > 0 ? pos.trailing_stop.toLocaleString() : '아직'}</td></tr>
-            <tr><td>본전 보호</td><td class="text-info">${pos.breakeven_stop > 0 ? pos.breakeven_stop.toLocaleString() : '아직'}</td></tr>
-            <tr class="table-info"><td colspan="2"><strong>추가 진입</strong></td></tr>
-            <tr><td>피라미딩</td><td>${pos.pyramid_count}회</td></tr>
-            <tr><td>물타기</td><td>${pos.avg_down_count}회</td></tr>
-            <tr><td>현재 리스크</td><td>${formatCurrency(pos.current_risk)}</td></tr>
-        </table>
-        ${guide}
-        ${fillsHtml}
-        <div class="mt-2 d-flex gap-2">
-            <button class="btn btn-outline-danger btn-sm flex-fill" onclick="closePosition('${symbol}')">
-                <i class="bi bi-x-circle me-1"></i>${symbol} 청산
-            </button>
-            <button class="btn btn-outline-warning btn-sm flex-fill" onclick="resetPosition('${symbol}')">
-                <i class="bi bi-arrow-counterclockwise me-1"></i>${symbol} 리셋
-            </button>
-        </div>
-    `;
+    content.innerHTML = guide;
 }
 
-// 특정 포지션 청산
-async function closePosition(symbol) {
-    const price = parseFloat(document.getElementById('closePrice').value) || 0;
-    if (!confirm(symbol + ' 포지션을 청산하시겠습니까?')) return;
-    const res = await fetchJson('/api/close', { symbol, price });
-    if (res.error) {
-        showToast('오류', res.error, 'danger');
-    } else {
-        const s = res.summary;
-        showToast('청산 완료',
-            `${symbol} 손익: ${formatCurrency(s.pnl)} (${s.pnl_pct.toFixed(2)}%)`,
-            s.pnl >= 0 ? 'success' : 'danger');
-        loadTradeStatus();
-    }
-}
+// ── 차트 ─────────────────────────────────────────────────
 
-// 특정 포지션 리셋
-async function resetPosition(symbol) {
-    if (!confirm(symbol + ' 포지션을 리셋하시겠습니까?')) return;
-    await fetchJson('/api/reset', { symbol });
-    showToast('리셋', symbol + ' 포지션이 리셋되었습니다', 'info');
-    document.getElementById('positionDetail').style.display = 'none';
-    loadTradeStatus();
-}
-
-let lastChartJson = '';
-
-function updatePriceChart(data) {
+function updateChart() {
     fetch('/api/chart').then(r => r.json()).then(chart => {
-        const newJson = JSON.stringify({bc: chart.bars?.length, active: chart.active, sh: chart.stop_history?.length, ep: chart.entry_price});
+        const newJson = JSON.stringify({
+            bc: chart.bars?.length, active: chart.active,
+            sh: chart.stop_history?.length, ep: chart.entry_price,
+            sym: chart.symbol,
+        });
         if (newJson !== lastChartJson || !lastChartJson) {
             drawPriceChart(chart);
             lastChartJson = newJson;
         }
     }).catch(err => {
-        console.error('Chart load error:', err);
-        // 에러 시에도 재시도를 위해 lastChartJson 리셋
+        console.error('Chart error:', err);
         lastChartJson = '';
     });
 }
@@ -662,8 +520,7 @@ function drawPriceChart(chartData) {
     const bars = chartData.bars || [];
     if (bars.length === 0) {
         priceChart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: [], datasets: [] },
+            type: 'line', data: { labels: [], datasets: [] },
             options: { responsive: true, plugins: { legend: { display: false } } }
         });
         return;
@@ -671,63 +528,29 @@ function drawPriceChart(chartData) {
 
     const labels = bars.map((b, i) => b.timestamp || `#${i}`);
     const closes = bars.map(b => b.close);
-    const highs = bars.map(b => b.high);
-    const lows = bars.map(b => b.low);
 
-    const datasets = [
-        {
-            label: '종가 (현재 가격)',
-            data: closes,
-            borderColor: '#6ea8fe',
-            backgroundColor: 'rgba(110,168,254,0.1)',
-            fill: false,
-            tension: 0.1,
-            pointRadius: 1,
-            borderWidth: 2,
-        },
-        {
-            label: '고가 (최고 가격)',
-            data: highs,
-            borderColor: 'rgba(25,135,84,0.3)',
-            fill: false,
-            pointRadius: 0,
-            borderWidth: 1,
-            borderDash: [2, 2],
-        },
-        {
-            label: '저가 (최저 가격)',
-            data: lows,
-            borderColor: 'rgba(220,53,69,0.3)',
-            fill: false,
-            pointRadius: 0,
-            borderWidth: 1,
-            borderDash: [2, 2],
-        },
-    ];
+    const datasets = [{
+        label: '종가',
+        data: closes,
+        borderColor: '#6ea8fe',
+        backgroundColor: 'rgba(110,168,254,0.08)',
+        fill: true,
+        tension: 0.1,
+        pointRadius: 0,
+        borderWidth: 2,
+    }];
 
-    // 손절선 오버레이
-    const stops = chartData.stop_history || [];
-    if (stops.length > 0 && chartData.active) {
+    // 손절선 (현재 종목에 포지션이 있을 때만)
+    if (chartData.active && chartData.stop_history?.length > 0) {
         const activeStops = new Array(bars.length).fill(null);
-        const initStops = new Array(bars.length).fill(null);
-        const trailStops = new Array(bars.length).fill(null);
-
-        stops.forEach(s => {
-            if (s.bar < bars.length) {
-                activeStops[s.bar] = s.active || null;
-                initStops[s.bar] = s.initial || null;
-                if (s.trailing > 0) trailStops[s.bar] = s.trailing;
-            }
+        chartData.stop_history.forEach(s => {
+            if (s.bar < bars.length) activeStops[s.bar] = s.active || null;
         });
-
         for (let i = 1; i < bars.length; i++) {
             if (activeStops[i] === null && activeStops[i-1] !== null) activeStops[i] = activeStops[i-1];
-            if (initStops[i] === null && initStops[i-1] !== null) initStops[i] = initStops[i-1];
-            if (trailStops[i] === null && trailStops[i-1] !== null) trailStops[i] = trailStops[i-1];
         }
-
         datasets.push({
-            label: '손실 한계선 (현재 적용)',
+            label: '현재 손절가',
             data: activeStops,
             borderColor: '#ff6b6b',
             borderWidth: 2,
@@ -735,55 +558,18 @@ function drawPriceChart(chartData) {
             fill: false,
             spanGaps: true,
         });
-        datasets.push({
-            label: '처음 설정한 손실선',
-            data: initStops,
-            borderColor: 'rgba(220,53,69,0.4)',
-            borderWidth: 1,
-            borderDash: [4, 4],
-            pointRadius: 0,
-            fill: false,
-            spanGaps: true,
-        });
-        datasets.push({
-            label: '주가 올라가면서 함께 올린 손실선',
-            data: trailStops,
-            borderColor: 'rgba(255,193,7,0.6)',
-            borderWidth: 1,
-            borderDash: [4, 4],
-            pointRadius: 0,
-            fill: false,
-            spanGaps: true,
-        });
-
-        if (chartData.entry_price > 0) {
-            datasets.push({
-                label: '샀을 때 평균 가격',
-                data: new Array(bars.length).fill(chartData.entry_price),
-                borderColor: 'rgba(13,202,240,0.5)',
-                borderWidth: 1,
-                borderDash: [8, 4],
-                pointRadius: 0,
-                fill: false,
-            });
-        }
     }
 
-    // 체결 마커
-    const fills = chartData.fills || [];
-    if (fills.length > 0) {
-        const fillData = new Array(bars.length).fill(null);
-        fills.forEach(f => {
-            if (f.bar < bars.length) fillData[f.bar] = f.price;
-        });
+    // 진입가 수평선
+    if (chartData.entry_price > 0) {
         datasets.push({
-            label: '매매 기록 (샀을 때)',
-            data: fillData,
-            borderColor: '#ffc107',
-            backgroundColor: '#ffc107',
-            pointRadius: 6,
-            pointStyle: 'triangle',
-            showLine: false,
+            label: '평균 매수가',
+            data: new Array(bars.length).fill(chartData.entry_price),
+            borderColor: 'rgba(13,202,240,0.6)',
+            borderWidth: 1,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            fill: false,
         });
     }
 
@@ -794,14 +580,10 @@ function drawPriceChart(chartData) {
             responsive: true,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { color: '#adb5bd', font: { size: 10 }, boxWidth: 12 }
-                },
-                tooltip: { mode: 'index' },
+                legend: { position: 'top', labels: { color: '#adb5bd', font: { size: 10 }, boxWidth: 12 } },
             },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#6c757d', maxTicksLimit: 20, font: { size: 9 } } },
+                x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#6c757d', maxTicksLimit: 15, font: { size: 9 } } },
                 y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#adb5bd' } },
             },
         }
@@ -811,143 +593,158 @@ function drawPriceChart(chartData) {
 // ── 포지션 관리 ──────────────────────────────────────────
 
 async function manualEntry() {
-    const symbol = document.getElementById('entrySymbol').value.trim();  // 포트폴리오: 심볼 필수
+    const symbol = document.getElementById('entrySymbol').value.trim();
     const price = parseFloat(document.getElementById('entryPrice').value);
     const qty = parseFloat(document.getElementById('entryQty').value) || 0;
     const direction = document.getElementById('entryDirection').value;
-    const entryDate = document.getElementById('entryDate').value;  // YYYY-MM-DD or ''
+    const entryDate = document.getElementById('entryDate').value;
 
-    if (!symbol) {
-        showToast('오류', '종목 심볼을 입력하세요', 'warning');
-        return;
-    }
-    if (!price || price <= 0) {
-        showToast('오류', '진입 가격을 입력하세요', 'warning');
-        return;
+    if (!symbol) { showToast('오류', '종목 코드를 입력하세요', 'warning'); return; }
+    if (!price || price <= 0) { showToast('오류', '매수 가격을 입력하세요', 'warning'); return; }
+
+    // 종목이 아직 로드되지 않았으면 먼저 로드
+    if (symbol !== currentSymbol) {
+        await selectTicker(symbol, '');
     }
 
-    // 방향 설정 반영
     await fetchJson('/api/config', { position_direction: direction, entry_source: 'manual' });
-
     const res = await fetchJson('/api/entry', { symbol, price, qty, entry_date: entryDate || '' });
     if (res.error) {
         showToast('오류', res.error, 'danger');
     } else {
-        showToast('진입', `${symbol} ${price.toLocaleString()} 에 ${direction === 'long' ? '롱' : '숏'} 진입 완료`, 'success');
-        loadTradeStatus();
+        showToast('등록 완료', `${symbol} ${price.toLocaleString()}에 ${direction === 'long' ? '매수' : '공매도'} 등록`, 'success');
+        selectedPositionSymbol = symbol;
+        loadAll();
     }
 }
 
 async function manualClose() {
-    const symbol = document.getElementById('entrySymbol').value.trim() || currentSymbol;  // 포트폴리오: 심볼 지정
+    const symbol = selectedPositionSymbol || document.getElementById('entrySymbol').value.trim() || currentSymbol;
     const price = parseFloat(document.getElementById('closePrice').value) || 0;
-    if (!confirm('정말 청산하시겠습니까?')) return;
-    const res = await fetchJson('/api/close', { symbol, price });
+    const qty = parseFloat(document.getElementById('closeQty').value) || 0;
+    const position = window._currentPosition;
+    
+    let confirmMsg = `${symbol} `;
+    if (qty > 0 && qty < position.qty) {
+        confirmMsg += `${qty}주를 ${price > 0 ? price.toLocaleString() : '현재가'}에 매도하시겠습니까?`;
+    } else {
+        confirmMsg += `포지션을 ${price > 0 ? price.toLocaleString() : '현재가'}에 전량 매도하시겠습니까?`;
+    }
+    
+    if (!confirm(confirmMsg)) return;
+    const res = await fetchJson('/api/close', { symbol, price, qty });
     if (res.error) {
         showToast('오류', res.error, 'danger');
     } else {
         const s = res.summary;
-        showToast('청산 완료',
-            `손익: ${formatCurrency(s.pnl)} (${s.pnl_pct.toFixed(2)}%) | R: ${s.r_initial.toFixed(2)}`,
+        const typeStr = s.is_partial && s.remaining_qty > 0 ? `부분매도 (남은 수량: ${s.remaining_qty}주)` : '전량 매도';
+        showToast('매도 완료',
+            `${symbol} ${typeStr} | 손익: ${formatCurrency(s.pnl)} (${s.pnl_pct.toFixed(2)}%)`,
             s.pnl >= 0 ? 'success' : 'danger');
-        loadTradeStatus();
+        document.getElementById('closePrice').value = '0';
+        document.getElementById('closeQty').value = '0';
+        selectedPositionSymbol = '';
+        loadAll();
     }
 }
 
 async function manualAdd() {
-    const symbol = document.getElementById('entrySymbol').value.trim() || currentSymbol;  // 포트폴리오: 심볼 지정
-    const addDate = document.getElementById('addDate').value;  // 날짜 추가
+    const symbol = selectedPositionSymbol || document.getElementById('entrySymbol').value.trim() || currentSymbol;
+    const addDate = document.getElementById('addDate').value;
     const price = parseFloat(document.getElementById('addPrice').value);
     const qty = parseFloat(document.getElementById('addQty').value);
     const type = document.getElementById('addType').value;
     if (!price || !qty || price <= 0 || qty <= 0) {
-        showToast('오류', '가격과 수량을 입력하세요', 'warning');
-        return;
+        showToast('오류', '가격과 수량을 입력하세요', 'warning'); return;
     }
     const res = await fetchJson('/api/add', { symbol, price, qty, type, entry_date: addDate });
     if (res.error) {
         showToast('차단', res.error, 'warning');
     } else {
-        showToast('추가진입', `${type === 'pyramid' ? '피라미딩' : '물타기'} 완료`, 'success');
+        showToast('추가 매수', `${type === 'pyramid' ? '피라미딩' : '물타기'} 완료`, 'success');
         document.getElementById('addPrice').value = '';
         document.getElementById('addQty').value = '';
         document.getElementById('addDate').value = '';
-        loadTradeStatus();
+        loadAll();
     }
 }
 
-// 추가진입 유형 설명 동적 업데이트
 function updateAddTypeExpl() {
     const type = document.getElementById('addType').value;
     const priceInput = parseFloat(document.getElementById('addPrice').value) || 0;
     const explDiv = document.getElementById('typeExpl');
-    const comparePriceSpan = document.getElementById('comparePrice');
-    const currentAvgSpan = document.getElementById('currentAvg');
-    
-    if (window._currentPosition) {
+
+    if (window._currentPosition && priceInput > 0) {
         const pos = window._currentPosition;
         const avg = pos.entry_price;
-        currentAvgSpan.textContent = avg.toLocaleString();
-        
-        if (priceInput > 0) {
-            comparePriceSpan.textContent = priceInput.toLocaleString();
-            
-            if (type === 'pyramid') {
-                if (pos.direction === 'long') {
-                    if (priceInput > avg) {
-                        explDiv.innerHTML = `<span class="text-success">✅ 좋음: 롱 포지션이므로 더 높은 가격(${priceInput})에서 추가하면 좋습니다</span>`;
-                    } else {
-                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 롱은 오르는 추세에서 추가하는 게 맞습니다. 이 가격은 "물타기"입니다</span>`;
-                    }
-                } else {
-                    if (priceInput < avg) {
-                        explDiv.innerHTML = `<span class="text-success">✅ 좋음: 숏 포지션이므로 더 낮은 가격(${priceInput})에서 추가하면 좋습니다</span>`;
-                    } else {
-                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 숏은 내려가는 추세에서 추가하는 게 맞습니다. 이 가격은 "물타기"입니다</span>`;
-                    }
-                }
-            } else {
-                if (pos.direction === 'long') {
-                    if (priceInput < avg) {
-                        explDiv.innerHTML = `<span class="text-info">📉 물타기: 롱 손실 상황에서 더 낮은 가격(${priceInput})에서 추가 (리스크O)</span>`;
-                    } else {
-                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 물타기는 손실 방향에서만 가능합니다</span>`;
-                    }
-                } else {
-                    if (priceInput > avg) {
-                        explDiv.innerHTML = `<span class="text-info">📈 물타기: 숏 손실 상황에서 더 높은 가격(${priceInput})에서 추가 (리스크O)</span>`;
-                    } else {
-                        explDiv.innerHTML = `<span class="text-warning">⚠️ 주의: 물타기는 손실 방향에서만 가능합니다</span>`;
-                    }
-                }
-            }
+        if (type === 'pyramid') {
+            const ok = pos.direction === 'long' ? priceInput > avg : priceInput < avg;
+            explDiv.innerHTML = ok
+                ? `<span class="text-success">수익 방향 추가 매수 (유리)</span>`
+                : `<span class="text-warning">이 가격은 피라미딩이 아닌 물타기입니다</span>`;
+        } else {
+            const ok = pos.direction === 'long' ? priceInput < avg : priceInput > avg;
+            explDiv.innerHTML = ok
+                ? `<span class="text-info">손실 방향 추가 매수 (리스크 증가)</span>`
+                : `<span class="text-warning">이 가격은 물타기가 아닌 피라미딩입니다</span>`;
         }
+    } else {
+        explDiv.innerHTML = '';
     }
 }
 
-async function resetTrade() {
-    const symbol = document.getElementById('entrySymbol').value.trim() || currentSymbol;  // 포트폴리오: 심볼 지정
-    if (!confirm(`거래를 리셋합니다 ${symbol ? `(${symbol})` : ''}. 가격 데이터는 유지됩니다.`)) return;
-    await fetchJson('/api/reset', { symbol });
-    showToast('리셋', `거래가 리셋되었습니다 ${symbol ? `(${symbol})` : ''}`, 'info');
-    loadTradeStatus();
+async function closeSelectedPosition() {
+    if (!selectedPositionSymbol) return;
+    const price = parseFloat(document.getElementById('closePrice').value) || 0;
+    const qty = parseFloat(document.getElementById('closeQty').value) || 0;
+    if (!confirm(`${selectedPositionSymbol} 포지션을 매도하시겠습니까?`)) return;
+    const res = await fetchJson('/api/close', { symbol: selectedPositionSymbol, price, qty });
+    if (res.error) { showToast('오류', res.error, 'danger'); return; }
+    const s = res.summary;
+    const typeStr = s.is_partial && s.remaining_qty > 0 ? `부분매도 (남은 수량: ${s.remaining_qty}주)` : '전량 매도';
+    showToast('매도 완료', `${selectedPositionSymbol} ${typeStr} | 손익: ${formatCurrency(s.pnl)}`, s.pnl >= 0 ? 'success' : 'danger');
+    document.getElementById('closePrice').value = '0';
+    document.getElementById('closeQty').value = '0';
+    selectedPositionSymbol = '';
+    loadAll();
 }
 
-async function fullReset() {
-    if (!confirm('모든 데이터를 초기화합니다. 가격 데이터와 거래 내역이 모두 삭제됩니다.')) return;
-    await fetchJson('/api/full-reset', {});
-    currentSymbol = '';
-    document.getElementById('tickerBar').style.display = 'none';
-    document.getElementById('tickerInfo').textContent = '종목을 검색하세요';
-    document.getElementById('tickerSearch').value = '';
-    lastChartJson = '';
-    showToast('초기화', '모든 데이터가 초기화되었습니다', 'info');
-    loadTradeStatus();
+async function resetSelectedPosition() {
+    if (!selectedPositionSymbol) return;
+    if (!confirm(`${selectedPositionSymbol} 포지션을 리셋하시겠습니까?`)) return;
+    await fetchJson('/api/reset', { symbol: selectedPositionSymbol });
+    showToast('리셋', `${selectedPositionSymbol} 포지션이 리셋되었습니다`, 'info');
+    selectedPositionSymbol = '';
+    loadAll();
+}
+
+async function refreshAllPrices() {
+    document.getElementById('portfolioSummaryBadge').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>갱신 중...';
+    try {
+        // 현재 종목 차트도 새로고침
+        if (currentSymbol) {
+            await fetchJson('/api/ticker/refresh', {});
+            lastChartJson = '';
+        }
+        const res = await fetchJson('/api/prices/refresh', {});
+        showToast('갱신', `${res.count}개 종목 가격 업데이트`, 'info');
+        loadAll();
+    } catch (err) {
+        showToast('오류', '가격 갱신 실패', 'danger');
+    }
 }
 
 // ── 초기화 ────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', loadTradeStatus);
-setInterval(loadTradeStatus, 5000);
+document.addEventListener('DOMContentLoaded', () => {
+    // 대시보드에서 '거래 페이지로' 버튼으로 진입 시 ?symbol= 처리
+    const urlSymbol = new URLSearchParams(window.location.search).get('symbol');
+    if (urlSymbol) {
+        selectTicker(urlSymbol, urlSymbol);
+    } else {
+        loadAll();
+    }
+});
+setInterval(loadAll, 10000);
 </script>
 {% endblock %}
