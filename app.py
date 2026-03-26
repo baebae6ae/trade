@@ -298,6 +298,17 @@ def api_manual_close():
     return jsonify(result)
 
 
+@app.route("/api/delete-fill", methods=["POST"])
+def api_delete_fill():
+    """거래 기록 삭제 (잘못된 진입/물타기 등)"""
+    data = request.get_json() or {}
+    fill_index = int(data.get("fill_index", -1))
+    symbol = data.get("symbol", "")
+    result = engine.delete_fill(fill_index, symbol=symbol)
+    _save()
+    return jsonify(result)
+
+
 @app.route("/api/reset", methods=["POST"])
 def api_reset():
     """거래 리셋 (가격 데이터 유지, 포트폴리오 지원)"""

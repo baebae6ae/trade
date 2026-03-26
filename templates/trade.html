@@ -426,10 +426,14 @@ function showPositionDetail(symbol) {
 
     let fillsHtml = '';
     if (pos.fills && pos.fills.length > 0) {
-        fillsHtml = '<div class="mt-2 small"><strong>거래 이력:</strong>' + pos.fills.map(f => {
+        fillsHtml = '<div class="mt-2"><strong class="small">거래 이력:</strong><div class="list-group list-group-sm mt-1">' + pos.fills.map((f, idx) => {
             const t = f.type === 'entry' ? '진입' : f.type === 'pyramid' ? '피라미딩' : '물타기';
-            return `<div class="text-muted">${t}: ${f.qty}주 @ ${f.price.toLocaleString()}</div>`;
-        }).join('') + '</div>';
+            const badgeBg = f.type === 'entry' ? 'bg-primary' : f.type === 'pyramid' ? 'bg-success' : 'bg-warning';
+            return `<div class="list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2">
+              <span class="small"><span class="badge ${badgeBg}">${t}</span> ${f.qty}주 @ ${f.price.toLocaleString()} KRW</span>
+              <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteFill('${symbol}', ${idx})" title="삭제"><i class="bi bi-trash"></i></button>
+            </div>`;
+        }).join('') + '</div></div>';
     }
 
     document.getElementById('positionDetailContent').innerHTML = `
@@ -715,6 +719,20 @@ async function resetSelectedPosition() {
     await fetchJson('/api/reset', { symbol: selectedPositionSymbol });
     showToast('리셋', `${selectedPositionSymbol} 포지션이 리셋되었습니다`, 'info');
     selectedPositionSymbol = '';
+    loadAll();
+}
+
+async function deleteFill(symbol, fillIndex) {
+    const typeNames = ['진입', '피라미딩', '물타기'];
+    const pos = window._allPositions?.find(p => p.symbol === symbol);
+    if (!pos || !pos.fills || !pos.fills[fillIndex]) return;
+    const fill = pos.fills[fillIndex];
+    const typeStr = typeNames[Object.keys({entry:0, pyramid:1, avg_down:2})[fill.type] || 0];
+    if (!confirm(`${typeStr} 기록을 삭제하시겠습니까?\n${fill.qty}주 @ ${fill.price.toLocaleString()} KRW`)) return;
+    
+    const res = await fetchJson('/api/delete-fill', { symbol, fill_index: fillIndex });
+    if (res.error) { showToast('오류', res.error, 'danger'); return; }
+    showToast('삭제 완료', `${typeStr} 기록이 삭제되었습니다\n${res.message}`, 'success');
     loadAll();
 }
 

@@ -1465,6 +1465,67 @@ class TradeEngine:
             result = self._close_partial(price, qty, symbol or self.current_symbol or "default")
             return {"success": True, "summary": result}
 
+    def delete_fill(self, fill_index: int, symbol: str = "") -> dict:
+        """거래 기록 삭제 (잘못된 진입/물타기 등)"""
+        sym = symbol or self.current_symbol or "default"
+        s = self._get_or_create_state(sym)
+        
+        if not s.active or not s.fills:
+            return {"error": "삭제할 거래 기록이 없습니다"}
+        
+        if fill_index < 0 or fill_index >= len(s.fills):
+            return {"error": f"유효하지 않은 기록 인덱스: {fill_index}"}
+        
+        deleted_fill = s.fills.pop(fill_index)
+        
+        # fills가 모두 삭제되면 포지션 리셋
+        if len(s.fills) == 0:
+            s.reset()
+            self._add_event("delete", f"모든 거래 기록 삭제 → 포지션 리셋")
+            return {"success": True, "message": "모든 기록 삭제 → 포지션 리셋됨", "deleted": deleted_fill}
+        
+        # 남은 fills을 기반으로 상태 재계산
+        total_qty = 0
+        total_cost = 0
+        
+        for f in s.fills:
+            total_qty += f.get("qty", 0)
+            total_cost += f.get("qty", 0) * f.get("price", 0)
+        
+        if total_qty > 0:
+            s.total_qty = total_qty
+            s.avg_entry = total_cost / total_qty
+            
+            # initial_risk_total 재계산 (초기 손절과의 거리)
+            if s.initial_stop > 0:
+                if s.direction == "long":
+                    risk_per_unit = s.initial_stop - s.avg_entry
+                else:
+                    risk_per_unit = s.avg_entry - s.initial_stop
+                s.initial_risk_total = abs(risk_per_unit * total_qty)
+            
+            # active_stop = initial_stop (처음으로 리셋)
+            s.active_stop = s.initial_stop
+            s.current_risk = abs((s.active_stop - s.avg_entry) * s.total_qty)
+            
+            self._add_event("delete",
+                           f"거래 기록 삭제: {deleted_fill.get('qty', 0)}주 @ {deleted_fill.get('price', 0):.0f} "
+                           f"| 남은 수: {total_qty}주 | 평균가: {s.avg_entry:.2f}")
+            
+            return {
+                "success": True,
+                "message": "거래 기록 삭제됨",
+                "deleted": deleted_fill,
+                "remaining": {
+                    "qty": total_qty,
+                    "avg_entry": round(s.avg_entry, 6),
+                    "total_qty": total_qty
+                }
+            }
+        else:
+            s.reset()
+            return {"success": True, "message": "모든 기록 삭제 → 포지션 리셋됨", "deleted": deleted_fill}
+
     # ── 리셋 ──────────────────────────────────────────────
 
     def reset(self, symbol: str = ""):
